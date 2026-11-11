@@ -1,0 +1,96 @@
+using BuildingDraft.Domain;
+using BuildingDraft.Domain.Abstractions;
+using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Projects;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+
+namespace BuildingDraft.Infrastructure.Persistence;
+
+public sealed class EfProjectRepository(BuildingDraftDbContext db) : IProjectRepository
+{
+    IQueryable<Project> Owned(Guid ownerId) =>
+        db.Projects.Include(p => p.Floors).Include(p => p.Variants).Where(p => p.OwnerId == ownerId);
+
+    public Task<Project?> FindAsync(Guid projectId, Guid ownerId, CancellationToken ct) =>
+        Owned(ownerId).FirstOrDefaultAsync(p => p.Id == projectId, ct);
+
+    public Task<Project?> FindByVariantAsync(Guid variantId, Guid ownerId, CancellationToken ct) =>
+        Owned(ownerId).FirstOrDefaultAsync(p => p.Variants.Any(v => v.Id == variantId), ct);
+
+    public Task<Project?> FindByFloorAsync(Guid floorId, Guid ownerId, CancellationToken ct) =>
+        Owned(ownerId).FirstOrDefaultAsync(p => p.Floors.Any(f => f.Id == floorId), ct);
+
+    // Ids are time-ordered UUIDv7, so ordering by id is ordering by creation.
+    public async Task<(IReadOnlyList<Project> Items, int Total)> ListAsync(Guid ownerId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = Owned(ownerId).Where(p => p.Status == ProjectStatus.Active);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(p => p.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return (items, total);
+    }
+
+    public void Add(Project project) => db.Projects.Add(project);
+}
+
+public sealed class EfGeometryVersionRepository(BuildingDraftDbContext db) : IGeometryVersionRepository
+{
+    public Task<GeometryVersion?> FindAsync(Guid versionId, CancellationToken ct) =>
+        db.GeometryVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == versionId, ct);
+
+    public Task<GeometryVersion?> FindByNumberAsync(Guid variantId, int versionNumber, CancellationToken ct) =>
+        db.GeometryVersions.AsNoTracking().FirstOrDefaultAsync(v => v.VariantId == variantId && v.VersionNumber == versionNumber, ct);
+
+    public async Task<IReadOnlyList<GeometryVersion>> ListAsync(Guid variantId, CancellationToken ct) =>
+        await db.GeometryVersions.AsNoTracking().Where(v => v.VariantId == variantId).OrderBy(v => v.VersionNumber).ToListAsync(ct);
+
+    public async Task<GeometryModel> LoadModelAsync(Guid versionId, CancellationToken ct)
+    {
+        var rows = new GeometryRows(
+            await db.Nodes.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct),
+            await db.Walls.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct),
+            await db.Rooms.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct),
+            await db.RoomBoundaries.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct),
+            await db.Openings.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct),
+            await db.Constraints.AsNoTracking().Where(r => r.GeometryVersionId == versionId).ToListAsync(ct));
+        return GeometryRowMapper.ToModel(rows);
+    }
+
+    public void Add(GeometryVersion version, GeometryModel model)
+    {
+        var rows = GeometryRowMapper.ToRows(version.Id, model);
+        db.GeometryVersions.Add(version);
+        db.Nodes.AddRange(rows.Nodes);
+        db.Walls.AddRange(rows.Walls);
+        db.Rooms.AddRange(rows.Rooms);
+        db.RoomBoundaries.AddRange(rows.Boundaries);
+        db.Openings.AddRange(rows.Openings);
+        db.Constraints.AddRange(rows.Constraints);
+    }
+}
+
+public sealed class EfGeometryOperationRepository(BuildingDraftDbContext db) : IGeometryOperationRepository
+{
+    public Task<GeometryOperation?> FindByClientIdAsync(Guid clientOperationId, CancellationToken ct) =>
+        db.GeometryOperations.AsNoTracking().FirstOrDefaultAsync(o => o.ClientOperationId == clientOperationId, ct);
+
+    public void Add(GeometryOperation operation) => db.GeometryOperations.Add(operation);
+}
+
+public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork
+{
+    const string UniqueViolation = "23505";
+
+    public async Task SaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is DbUpdateConcurrencyException
+                                       || ex is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation } })
+        {
+            throw new DomainException("VERSION_CONFLICT", "The data was changed by another request. Reload and retry.");
+        }
+    }
+}

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/BuildingDraft.Api/BuildingDraft.Api.csproj" />
+    <Project Path="src/BuildingDraft.Application/BuildingDraft.Application.csproj" />
     <Project Path="src/BuildingDraft.Domain/BuildingDraft.Domain.csproj" />
     <Project Path="src/BuildingDraft.Infrastructure/BuildingDraft.Infrastructure.csproj" />
   </Folder>

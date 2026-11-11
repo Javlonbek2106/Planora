@@ -1,34 +1,43 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using BuildingDraft.Api.Endpoints;
+using BuildingDraft.Api.Infrastructure;
+using BuildingDraft.Application;
+using BuildingDraft.Infrastructure;
+using BuildingDraft.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+});
+
+builder.Services
+    .AddApplication()
+    .AddInfrastructure(builder.Configuration.GetConnectionString("Default")
+                       ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured."))
+    .AddScoped<ICurrentUser, DevCurrentUser>()
+    .AddExceptionHandler<DomainExceptionHandler>()
+    .AddProblemDetails();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-
-app.UseHttpsRedirection();
-
-var summaries = new[]
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    using var scope = app.Services.CreateScope();
+    scope.ServiceProvider.GetRequiredService<BuildingDraftDbContext>().Database.Migrate();
+}
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-});
+app.UseExceptionHandler();
+
+var api = app.MapGroup("/api/v1");
+api.MapProjects();
+api.MapVariants();
+api.MapGeometry();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+public partial class Program;
