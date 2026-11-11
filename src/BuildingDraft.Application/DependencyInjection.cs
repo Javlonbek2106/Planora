@@ -18,6 +18,7 @@ public static class DependencyInjection
         .AddSingleton(GeometryProcessor.Default)
         .AddScoped<ProjectService>()
         .AddScoped<VariantService>()
+        .AddScoped<MeasurementRecorder>()
         .AddScoped<GeometryVersionWriter>()
         .AddScoped<GeometryService>()
         .AddScoped<MeasurementService>()

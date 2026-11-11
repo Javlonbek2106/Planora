@@ -338,12 +338,34 @@ class RemoveOpening extends PlanCommand {
 
 /// Fixes a wall to a measured length. [valueMm] is an inner dimension by default (between the wall faces), which the
 /// server turns into a centerline length by adding the wall thickness; the far end moves, the start stays.
+///
+/// With a [measurementId] the command also records the measurement in the wall's history (source, notes, when it was
+/// taken, whether the user confirmed it). That metadata travels in the same server command, so the history and the
+/// geometry change are applied together.
 class ApplyMeasurement extends PlanCommand {
-  const ApplyMeasurement({required this.wallId, required this.valueMm, this.inner = true});
+  const ApplyMeasurement({
+    required this.wallId,
+    required this.valueMm,
+    this.inner = true,
+    this.measurementId,
+    this.source = MeasurementSource.manual,
+    this.verified = false,
+    this.notes,
+    this.deviceName,
+    this.capturedAt,
+  });
 
   final String wallId;
   final double valueMm;
   final bool inner;
+  final String? measurementId;
+  final MeasurementSource source;
+
+  /// The user confirmed the value; only then is it "verified" (never by default, never for estimates).
+  final bool verified;
+  final String? notes;
+  final String? deviceName;
+  final DateTime? capturedAt;
 
   @override
   String get label => 'Apply measurement';
@@ -364,12 +386,48 @@ class ApplyMeasurement extends PlanCommand {
     return model.copyWith(
       nodes: {...model.nodes, wall.endNodeId: PlanNode(wall.endNodeId, roundMm(moved.x), roundMm(moved.y))},
       fixedLengths: {...model.fixedLengths, wallId: roundMm(centerline)},
+      measurements: _recorded(model),
     );
+  }
+
+  /// History after this measurement: older applied ones of the wall become superseded (the server does the same).
+  Map<String, PlanMeasurement> _recorded(PlanModel model) {
+    final id = measurementId;
+    if (id == null || model.measurements.containsKey(id)) return model.measurements;
+
+    final history = {
+      for (final e in model.measurements.entries)
+        e.key: e.value.wallId == wallId && e.value.status != MeasurementStatus.rejected ? e.value.withStatus(MeasurementStatus.superseded) : e.value,
+    };
+    history[id] = PlanMeasurement(
+      id: id,
+      wallId: wallId,
+      valueMm: valueMm,
+      inner: inner,
+      source: source,
+      status: verified ? MeasurementStatus.verified : MeasurementStatus.unverified,
+      capturedAt: (capturedAt ?? DateTime.now()).toUtc(),
+      deviceName: deviceName,
+      notes: notes,
+    );
+    return history;
   }
 
   @override
   List<Map<String, Object?>> toServer(String floorId) => [
-        _command('apply_measurement', {'wallId': wallId, 'valueMm': valueMm, 'reference': inner ? 'inner' : 'centerline'})
+        _command('apply_measurement', {
+          'wallId': wallId,
+          'valueMm': valueMm,
+          'reference': inner ? 'inner' : 'centerline',
+          if (measurementId != null) ...{
+            'measurementId': measurementId,
+            'source': source.wire,
+            'verified': verified,
+            if (notes != null && notes!.trim().isNotEmpty) 'notes': notes!.trim(),
+            if (deviceName != null) 'deviceName': deviceName,
+            'capturedAt': (capturedAt ?? DateTime.now()).toUtc().toIso8601String(),
+          },
+        })
       ];
 }
 

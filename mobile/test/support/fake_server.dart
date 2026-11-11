@@ -66,6 +66,22 @@ class FakeServer {
           final results = _push((body['operations']! as List).cast<Map<String, Object?>>(), rebase: true, atomic: true);
           result = {'resolution': 'keep_mine', 'currentVersion': version, 'results': results};
         }
+      case ('GET', '/api/v1/projects/$projectId/measurements'):
+        result = [
+          for (final m in model.measurements.values)
+            {
+              'id': m.id,
+              'targetObjectId': m.wallId,
+              'valueMm': m.valueMm,
+              'reference': m.inner ? 'inner' : 'centerline',
+              'source': m.source.wire,
+              'status': m.status.name,
+              'isEstimate': false,
+              'capturedAt': m.capturedAt.toIso8601String(),
+              'deviceName': m.deviceName,
+              'notes': m.notes,
+            }
+        ];
       case ('GET', '/api/v1/variants/$variantId/geometry'):
         result = {
           'version': version,

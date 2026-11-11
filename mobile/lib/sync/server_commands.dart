@@ -53,7 +53,17 @@ PlanCommand? decodeServerCommand(String type, Map<String, Object?> p) {
     case 'remove_opening':
       return RemoveOpening(p['openingId']! as String);
     case 'apply_measurement':
-      return ApplyMeasurement(wallId: p['wallId']! as String, valueMm: _num(p['valueMm']), inner: (p['reference'] ?? 'inner') == 'inner');
+      return ApplyMeasurement(
+        wallId: p['wallId']! as String,
+        valueMm: _num(p['valueMm']),
+        inner: (p['reference'] ?? 'inner') == 'inner',
+        measurementId: p['measurementId'] as String?,
+        source: MeasurementSource.fromWire((p['source'] ?? 'manual') as String),
+        verified: p['verified'] == true,
+        notes: p['notes'] as String?,
+        deviceName: p['deviceName'] as String?,
+        capturedAt: p['capturedAt'] == null ? null : DateTime.tryParse(p['capturedAt']! as String),
+      );
     default:
       return null;
   }
@@ -123,8 +133,45 @@ List<PlanCommand> commandsForModel(PlanModel model) => [
         CreateRoom(roomId: room.id, name: room.name, wallIds: room.wallIds, roomType: room.roomType, areaType: room.areaType),
       for (final o in model.openings.values)
         AttachOpening(openingId: o.id, wallId: o.wallId, kind: o.kind, offsetMm: o.offsetMm, widthMm: o.widthMm, heightMm: o.heightMm, sillMm: o.sillMm),
-      for (final e in model.fixedLengths.entries) ApplyMeasurement(wallId: e.key, valueMm: e.value, inner: false),
+      for (final e in model.fixedLengths.entries) _measurementCommand(model, e.key, e.value),
     ];
+
+/// The current measurement of the wall (not superseded, not rejected), with its history entry, or a plain centerline length when the plan
+/// has none. (Older entries of a wall are not uploaded: applying them in turn would only move the same corner back
+/// and forth.)
+ApplyMeasurement _measurementCommand(PlanModel model, String wallId, double centerline) {
+  // The current measurement is the one that was not replaced or rejected; time alone cannot decide when two share it.
+  final recorded = model.measurementsOf(wallId).where((m) => m.status == MeasurementStatus.unverified || m.status == MeasurementStatus.verified).firstOrNull;
+  if (recorded == null) return ApplyMeasurement(wallId: wallId, valueMm: centerline, inner: false);
+  return ApplyMeasurement(
+    wallId: wallId,
+    valueMm: recorded.valueMm,
+    inner: recorded.inner,
+    measurementId: recorded.id,
+    source: recorded.source,
+    verified: recorded.status == MeasurementStatus.verified,
+    notes: recorded.notes,
+    deviceName: recorded.deviceName,
+    capturedAt: recorded.capturedAt,
+  );
+}
+
+/// The measurement history from `GET /projects/{id}/measurements`, as the plan stores it.
+Map<String, PlanMeasurement> measurementsFromServer(List<Map<String, Object?>> items) => {
+      for (final m in items)
+        if (m['isEstimate'] != true)
+          m['id']! as String: PlanMeasurement(
+            id: m['id']! as String,
+            wallId: m['targetObjectId']! as String,
+            valueMm: _num(m['valueMm']),
+            inner: m['reference'] != 'centerline',
+            source: MeasurementSource.fromWire(m['source']! as String),
+            status: MeasurementStatus.fromWire(m['status']! as String),
+            capturedAt: DateTime.parse(m['capturedAt']! as String),
+            deviceName: m['deviceName'] as String?,
+            notes: m['notes'] as String?,
+          ),
+    };
 
 List<PlanCommand> _wallCommands(PlanModel model) => [
       for (final wall in model.walls.values)

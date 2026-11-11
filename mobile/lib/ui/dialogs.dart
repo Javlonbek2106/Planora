@@ -95,6 +95,9 @@ Future<void> showMeasureDialog(BuildContext context, PlanController c) async {
 
   final centerline = c.model.length(wall);
   var inner = true;
+  var source = MeasurementSource.laserManual;
+  var verified = false;
+  final notes = TextEditingController();
   final value = TextEditingController(text: (centerline - wall.thicknessMm).round().toString());
 
   await showDialog<void>(
@@ -133,6 +136,23 @@ Future<void> showMeasureDialog(BuildContext context, PlanController c) async {
                   onSelectionChanged: (s) => setState(() => inner = s.first),
                 ),
                 const SizedBox(height: 12),
+                DropdownButtonFormField<MeasurementSource>(
+                  key: const ValueKey('measure-source'),
+                  isExpanded: true,
+                  initialValue: source,
+                  decoration: const InputDecoration(labelText: 'How was it measured?'),
+                  items: [for (final s in MeasurementSource.values) DropdownMenuItem(value: s, child: Text(s.label))],
+                  onChanged: (s) => setState(() => source = s ?? source),
+                ),
+                TextField(key: const ValueKey('measure-notes'), controller: notes, decoration: const InputDecoration(labelText: 'Note (optional)')),
+                CheckboxListTile(
+                  key: const ValueKey('measure-verified'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: verified,
+                  onChanged: (v) => setState(() => verified = v ?? false),
+                  title: const Text('I checked this value (mark as verified)'),
+                ),
                 Text(
                   result == null || result <= 0
                       ? 'Enter a length in millimetres.'
@@ -149,7 +169,7 @@ Future<void> showMeasureDialog(BuildContext context, PlanController c) async {
               onPressed: entered == null || entered <= 0
                   ? null
                   : () {
-                      c.applyMeasurement(entered, inner: inner);
+                      c.applyMeasurement(entered, inner: inner, source: source, verified: verified, notes: notes.text);
                       Navigator.pop(dialogContext);
                     },
               child: const Text('Apply'),

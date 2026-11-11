@@ -92,6 +92,75 @@ class PlanOpening {
       );
 }
 
+/// How a measured length was obtained. Only exact sources exist here: AR/LiDAR and AI results are estimates and
+/// the server refuses them as lengths.
+enum MeasurementSource {
+  manual,
+  laserManual,
+  laserBluetooth;
+
+  /// The name the server uses in JSON.
+  String get wire => switch (this) { manual => 'manual', laserManual => 'laser_manual', laserBluetooth => 'laser_bluetooth' };
+
+  static MeasurementSource fromWire(String value) => switch (value) {
+        'laser_manual' => laserManual,
+        'laser_bluetooth' => laserBluetooth,
+        _ => manual,
+      };
+
+  String get label => switch (this) { manual => 'Tape / manual', laserManual => 'Laser (typed in)', laserBluetooth => 'Laser (Bluetooth)' };
+}
+
+enum MeasurementStatus {
+  unverified,
+  verified,
+
+  /// Replaced by a newer measurement of the same wall. Kept: history is never deleted.
+  superseded,
+  rejected;
+
+  static MeasurementStatus fromWire(String value) => MeasurementStatus.values.firstWhere((s) => s.name == value, orElse: () => unverified);
+}
+
+/// One entry of a wall's measurement history: the value never changes, only its status does.
+class PlanMeasurement {
+  const PlanMeasurement({
+    required this.id,
+    required this.wallId,
+    required this.valueMm,
+    required this.inner,
+    required this.source,
+    required this.status,
+    required this.capturedAt,
+    this.deviceName,
+    this.notes,
+  });
+
+  final String id;
+  final String wallId;
+  final double valueMm;
+
+  /// Between the wall faces (true) or along the centerline (false).
+  final bool inner;
+  final MeasurementSource source;
+  final MeasurementStatus status;
+  final DateTime capturedAt;
+  final String? deviceName;
+  final String? notes;
+
+  PlanMeasurement withStatus(MeasurementStatus next) => PlanMeasurement(
+        id: id,
+        wallId: wallId,
+        valueMm: valueMm,
+        inner: inner,
+        source: source,
+        status: next,
+        capturedAt: capturedAt,
+        deviceName: deviceName,
+        notes: notes,
+      );
+}
+
 class PlanRoom {
   const PlanRoom({
     required this.id,
@@ -118,11 +187,13 @@ class PlanModel {
     Map<String, PlanRoom> rooms = const {},
     Map<String, PlanOpening> openings = const {},
     Map<String, double> fixedLengths = const {},
+    Map<String, PlanMeasurement> measurements = const {},
   })  : nodes = Map.unmodifiable(nodes),
         walls = Map.unmodifiable(walls),
         rooms = Map.unmodifiable(rooms),
         openings = Map.unmodifiable(openings),
-        fixedLengths = Map.unmodifiable(fixedLengths);
+        fixedLengths = Map.unmodifiable(fixedLengths),
+        measurements = Map.unmodifiable(measurements);
 
   final String floorId;
   final Map<String, PlanNode> nodes;
@@ -133,6 +204,13 @@ class PlanModel {
   /// Walls whose centerline length was fixed by a measurement (wall id -> mm). The server keeps these as
   /// constraints, so an edit that would change such a length has to be refused here as well.
   final Map<String, double> fixedLengths;
+
+  /// The history of measurements taken on this plan's walls (newest information last in insertion order).
+  final Map<String, PlanMeasurement> measurements;
+
+  /// The measurements of one wall, newest first.
+  List<PlanMeasurement> measurementsOf(String wallId) =>
+      measurements.values.where((m) => m.wallId == wallId).toList()..sort((a, b) => b.capturedAt.compareTo(a.capturedAt));
 
   Vec2 pos(String nodeId) => nodes[nodeId]!.position;
 
@@ -148,6 +226,7 @@ class PlanModel {
     Map<String, PlanRoom>? rooms,
     Map<String, PlanOpening>? openings,
     Map<String, double>? fixedLengths,
+    Map<String, PlanMeasurement>? measurements,
     String? floorId,
   }) =>
       PlanModel(
@@ -157,6 +236,7 @@ class PlanModel {
         rooms: rooms ?? this.rooms,
         openings: openings ?? this.openings,
         fixedLengths: fixedLengths ?? this.fixedLengths,
+        measurements: measurements ?? this.measurements,
       );
 
   Map<String, Object?> toJson() => {
@@ -189,6 +269,20 @@ class PlanModel {
             }
         ],
         'fixedLengths': fixedLengths,
+        'measurements': [
+          for (final m in measurements.values)
+            {
+              'id': m.id,
+              'wallId': m.wallId,
+              'valueMm': m.valueMm,
+              'inner': m.inner,
+              'source': m.source.wire,
+              'status': m.status.name,
+              'capturedAt': m.capturedAt.toUtc().toIso8601String(),
+              'deviceName': m.deviceName,
+              'notes': m.notes,
+            }
+        ],
       };
 
   /// Reads a stored plan; plans saved before rooms and openings existed simply have none.
@@ -233,6 +327,20 @@ class PlanModel {
           )
       },
       fixedLengths: {for (final e in ((json['fixedLengths'] ?? const {}) as Map).entries) e.key as String: (e.value as num).toDouble()},
+      measurements: {
+        for (final m in list('measurements'))
+          m['id']! as String: PlanMeasurement(
+            id: m['id']! as String,
+            wallId: m['wallId']! as String,
+            valueMm: (m['valueMm']! as num).toDouble(),
+            inner: m['inner']! as bool,
+            source: MeasurementSource.fromWire(m['source']! as String),
+            status: MeasurementStatus.fromWire(m['status']! as String),
+            capturedAt: DateTime.parse(m['capturedAt']! as String),
+            deviceName: m['deviceName'] as String?,
+            notes: m['notes'] as String?,
+          )
+      },
     );
   }
 }

@@ -11,11 +11,15 @@ public sealed record StagedOperation(Guid ClientOperationId, int ExpectedVersion
 public sealed class GeometryVersionWriter(
     IGeometryVersionRepository versions,
     IGeometryOperationRepository operations,
+    MeasurementRecorder measurementRecorder,
     TimeProvider clock)
 {
-    public GeometryVersion Stage(Project project, DesignVariant variant, GeometryVersion parent, GeometryModel model, StagedOperation operation)
+    public async Task<GeometryVersion> StageAsync(Project project, DesignVariant variant, GeometryVersion parent, GeometryModel model, StagedOperation operation, CancellationToken ct)
     {
         project.EnsureFloorsExist(model.Nodes.Values.Select(n => n.FloorId).Concat(model.Rooms.Values.Select(r => r.FloorId)));
+
+        // Anything that can refuse the operation is checked before the first thing is staged.
+        var measurement = await measurementRecorder.PrepareAsync(project, variant, operation.CommandType, operation.Payload, ct);
 
         var now = clock.GetUtcNow();
         var next = variant.AdvanceVersion(operation.ExpectedVersion);
@@ -23,6 +27,8 @@ public sealed class GeometryVersionWriter(
         versions.Add(version, model);
         operations.Add(GeometryOperation.Record(project.Id, version, operation.ClientOperationId, operation.CommandType,
             operation.Payload, operation.DeviceId, now));
+        if (measurement is not null)
+            measurementRecorder.Commit(measurement, version);
         return version;
     }
 }

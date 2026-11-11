@@ -546,13 +546,22 @@ class PlanController extends ChangeNotifier {
   // ---- measurements ----
 
   /// Fixes the selected wall to a measured length ([inner] = between the wall faces, otherwise centerline).
-  bool applyMeasurement(double valueMm, {bool inner = true}) {
+  bool applyMeasurement(double valueMm, {bool inner = true, MeasurementSource source = MeasurementSource.laserManual, bool verified = false, String? notes}) {
     final wallId = selectedWallId;
     if (wallId == null) {
       lastError = 'Select a wall to measure first.';
       notifyListeners();
       return false;
     }
-    return execute(ApplyMeasurement(wallId: wallId, valueMm: valueMm, inner: inner));
+    return execute(ApplyMeasurement(
+      wallId: wallId,
+      valueMm: valueMm,
+      inner: inner,
+      measurementId: _ids(),
+      source: source,
+      verified: verified,
+      notes: notes,
+      capturedAt: DateTime.now().toUtc(),
+    ));
   }
 }

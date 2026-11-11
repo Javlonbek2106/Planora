@@ -199,6 +199,61 @@ void main() {
       expect(c.model.fixedLengths['w0'], 4250);
     });
 
+    testWidgets('the measurement is recorded with the chosen source, a note and a confirmation, and shown in the wall history', (tester) async {
+      final c = await pumpApp(tester);
+      await tapPlan(tester, c, const Vec2(2000, 0));
+      await tester.tap(find.byKey(const ValueKey('action-measure')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('measure-source')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tape / manual').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('measure-notes')), 'north wall, tape');
+      await tester.tap(find.byKey(const ValueKey('measure-verified')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('measure-apply')));
+      await tester.pumpAndSettle();
+
+      final entry = c.model.measurements.values.single;
+      expect((entry.source, entry.status, entry.notes), (MeasurementSource.manual, MeasurementStatus.verified, 'north wall, tape'));
+      expect(find.byKey(const ValueKey('measurement-history')), findsOneWidget);
+      expect(find.textContaining('Tape / manual'), findsWidgets);
+      expect(find.textContaining('verified'), findsWidgets);
+      expect(find.textContaining('north wall, tape'), findsOneWidget);
+    });
+
+    testWidgets('by default a measurement is a typed-in laser value that is not yet verified', (tester) async {
+      final c = await pumpApp(tester);
+      await tapPlan(tester, c, const Vec2(2000, 0));
+      await tester.tap(find.byKey(const ValueKey('action-measure')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('measure-apply')));
+      await tester.pumpAndSettle();
+
+      final entry = c.model.measurements.values.single;
+      expect((entry.source, entry.status), (MeasurementSource.laserManual, MeasurementStatus.unverified));
+    });
+
+    testWidgets('measuring again keeps the old entry in the history, struck through', (tester) async {
+      final c = await pumpApp(tester);
+      for (var i = 0; i < 2; i++) {
+        await tapPlan(tester, c, const Vec2(2000, 0));
+        await tester.tap(find.byKey(const ValueKey('action-measure')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const ValueKey('measure-value')), i == 0 ? '3800' : '3850');
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('measure-apply')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(c.model.measurementsOf('w0'), hasLength(2));
+      expect(find.textContaining('superseded'), findsOneWidget);
+      final struck = tester.widgetList<Text>(find.byType(Text)).where((t) => t.style?.decoration == TextDecoration.lineThrough);
+      expect(struck, hasLength(1));
+    });
+
     testWidgets('the apply button waits for a valid number', (tester) async {
       final c = await pumpApp(tester);
       await tapPlan(tester, c, const Vec2(2000, 0));

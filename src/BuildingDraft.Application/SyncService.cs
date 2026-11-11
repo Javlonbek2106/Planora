@@ -176,8 +176,8 @@ public sealed class SyncService(
                 if (!outcome.Success)
                     throw new GeometryRejectedException(outcome.Failure!);
 
-                parent = writer.Stage(project, variant, parent, outcome.Model!,
-                    new(op.OperationId, expected, op.CommandType, op.Payload.GetRawText(), deviceId));
+                parent = await writer.StageAsync(project, variant, parent, outcome.Model!,
+                    new(op.OperationId, expected, op.CommandType, op.Payload.GetRawText(), deviceId), ct);
                 model = outcome.Model!;
                 results[index] = new(op.OperationId, SyncStatus.Acknowledged, Version: parent.VersionNumber, Warnings: outcome.Warnings);
                 applied.Add(index);

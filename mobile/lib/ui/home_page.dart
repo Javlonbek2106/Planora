@@ -305,6 +305,7 @@ class PropertiesPanel extends StatelessWidget {
           Text('Height: ${mm(wall.heightMm)}'),
           if (m.fixedLengths.containsKey(wall.id)) Text('Length fixed by a measurement', key: const ValueKey('prop-fixed')),
           Text('Openings: ${m.openingsOn(wall.id).length}'),
+          MeasurementHistory(model: m, wallId: wall.id),
           Text('From (${m.nodes[wall.startNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.startNodeId]!.y.toStringAsFixed(0)})'),
           Text('To (${m.nodes[wall.endNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.endNodeId]!.y.toStringAsFixed(0)})'),
         ] else if (opening != null) ...[
@@ -344,6 +345,53 @@ class PropertiesPanel extends StatelessWidget {
           Text('Unsent changes: ${session!.pendingCount}', key: const ValueKey('prop-pending')),
           if (session!.message != null) Text(session!.message!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],
+      ],
+    );
+  }
+}
+
+/// The measurements taken on a wall, newest first. Older ones stay visible but struck through once superseded:
+/// the history is never deleted.
+class MeasurementHistory extends StatelessWidget {
+  const MeasurementHistory({super.key, required this.model, required this.wallId});
+
+  final PlanModel model;
+  final String wallId;
+
+  static String _when(DateTime t) {
+    final local = t.toLocal();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} ${months[local.month - 1]} $hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = model.measurementsOf(wallId);
+    if (history.isEmpty) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      key: const ValueKey('measurement-history'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Text('Measurements', style: Theme.of(context).textTheme.labelLarge),
+        for (final m in history)
+          Padding(
+            key: ValueKey('measurement-${m.id}'),
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '${m.valueMm.round()} mm ${m.inner ? 'between faces' : 'centerline'}\n'
+              '${m.source.label} \u00B7 ${m.status.name} \u00B7 ${_when(m.capturedAt)}'
+              '${m.notes == null || m.notes!.isEmpty ? '' : '\n${m.notes}'}',
+              style: TextStyle(
+                color: m.status == MeasurementStatus.verified ? scheme.primary : scheme.onSurfaceVariant,
+                decoration: m.status == MeasurementStatus.superseded ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ),
       ],
     );
   }

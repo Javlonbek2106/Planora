@@ -160,6 +160,26 @@ class ApiClient {
     return [for (final r in (response['results']! as List).cast<Map<String, Object?>>()) PushResult.fromJson(r)];
   }
 
+  /// The measurement history of a project's variant.
+  Future<List<Map<String, Object?>>> measurements(String projectId, String variantId) async {
+    final path = '/api/v1/projects/$projectId/measurements?variantId=$variantId';
+    final headers = {'Accept': 'application/json'};
+    final bearer = await token?.call();
+    if (bearer != null && bearer.isNotEmpty) headers['Authorization'] = 'Bearer $bearer';
+    final uri = Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}$path');
+
+    http.Response response;
+    try {
+      response = await client.get(uri, headers: headers).timeout(timeout);
+    } on http.ClientException catch (e) {
+      throw OfflineException(e.message);
+    } on TimeoutException {
+      throw const OfflineException('The server did not answer in time.');
+    }
+    if (response.statusCode != 200) throw ApiException(response.statusCode, 'HTTP_${response.statusCode}', 'Could not load measurements.');
+    return (jsonDecode(response.body) as List).cast<Map<String, Object?>>();
+  }
+
   /// The full geometry of a variant: `{ version, nodes, walls, ... }`.
   Future<Map<String, Object?>> geometry(String variantId) => _send('GET', '/api/v1/variants/$variantId/geometry');
 }

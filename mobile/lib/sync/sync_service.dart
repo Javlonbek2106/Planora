@@ -125,7 +125,8 @@ class SyncService {
 
   Future<PlanModel> _reload(StoredDocument document) async {
     final geometry = await api.geometry(document.variantId);
-    final model = modelFromSnapshot(geometry, document.floorId);
+    final history = await api.measurements(document.projectId, document.variantId);
+    final model = modelFromSnapshot(geometry, document.floorId).copyWith(measurements: measurementsFromServer(history));
     await store.saveDocument(document.copyWith(serverVersion: geometry['version']! as int, model: model));
     return model;
   }

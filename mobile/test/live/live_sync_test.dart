@@ -241,6 +241,51 @@ void main() {
       expect((summary['openAreaM2']! as num).toDouble(), closeTo(1.8 * 2.8, 1e-6), reason: 'the balcony is reported apart from the enclosed area');
     }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
 
+    test('a measurement taken offline reaches the real server with its source, note and confirmation, and another device reads the history', () async {
+      final api = newApi();
+      final a = await deviceA(api);
+      await drawRectangle(a);
+      await a.session.syncNow();
+
+      // Offline: measure the bottom wall twice (the second replaces the first), then sync.
+      a.editor.selectTool(PlanTool.select);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      expect(a.editor.applyMeasurement(3800, source: MeasurementSource.laserManual, notes: 'first reading'), isTrue, reason: a.editor.lastError);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      expect(a.editor.applyMeasurement(3850, source: MeasurementSource.manual, notes: 'tape check', verified: true), isTrue, reason: a.editor.lastError);
+      await a.session.flush();
+      expect(await a.store.outbox(a.session.variantId), hasLength(2));
+
+      await a.session.syncNow();
+      expect(a.session.status, SyncStatus.upToDate, reason: a.session.message);
+
+      // What the real server recorded:
+      final response = await http.get(Uri.parse('$apiUrl/api/v1/projects/${a.session.document.projectId}/measurements'));
+      final recorded = (jsonDecode(response.body) as List).cast<Map<String, Object?>>();
+      expect(recorded, hasLength(2));
+      final first = recorded.firstWhere((m) => m['notes'] == 'first reading');
+      final second = recorded.firstWhere((m) => m['notes'] == 'tape check');
+      expect((first['source'], first['status'], first['isApplied']), ('laser_manual', 'superseded', true));
+      expect((second['source'], second['status'], second['isApplied']), ('manual', 'verified', true));
+      expect((second['valueMm']! as num).toDouble(), 3850);
+      expect(second['reference'], 'inner');
+      expect(second['isEstimate'], false);
+
+      // The ids the app generated are the ids the server stores: the same record on both sides.
+      expect(recorded.map((m) => m['id']), unorderedEquals(a.editor.model.measurements.keys));
+
+      // Another device loads the plan and reads the history from the real response.
+      final b = await deviceB(api, a);
+      final report = await b.service.keepServer(b.session.variantId);
+      expect(report.status, SyncStatus.upToDate, reason: report.message);
+      final model = report.newModel!;
+      expect(model.measurementsOf(model.fixedLengths.keys.single).map((m) => m.status), unorderedEquals([MeasurementStatus.superseded, MeasurementStatus.verified]));
+      expect(model.measurements.values.firstWhere((m) => m.notes == 'tape check').capturedAt.isUtc, isTrue);
+      expect(model.fixedLengths.values.single, 4050);
+    }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
+
     test('the same push sent twice is applied once, and a down server leaves the edit queued', () async {
       final api = newApi();
       final a = await deviceA(api);

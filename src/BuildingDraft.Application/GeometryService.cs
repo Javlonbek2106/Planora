@@ -124,8 +124,8 @@ public sealed class GeometryService(
         Guid clientOperationId, int expectedVersion, string commandType, string payload, string? deviceId,
         IReadOnlyList<ValidationIssue> warnings, CancellationToken ct)
     {
-        var version = writer.Stage(project, variant, parent, model,
-            new(clientOperationId, expectedVersion, commandType, payload, deviceId));
+        var version = await writer.StageAsync(project, variant, parent, model,
+            new(clientOperationId, expectedVersion, commandType, payload, deviceId), ct);
         await unitOfWork.SaveChangesAsync(ct);
 
         return new(true, version.VersionNumber, clientOperationId, new(true, warnings, []));

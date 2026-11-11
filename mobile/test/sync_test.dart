@@ -318,6 +318,71 @@ void main() {
     });
   });
 
+  group('measurement history', () {
+    Future<Harness> withWall() async {
+      final h = await Harness.create();
+      await h.edit(const CreateWall(wallId: 'w1', startNodeId: 'n1', start: Vec2(0, 0), endNodeId: 'n2', end: Vec2(4000, 0)));
+      await h.edit(const CreateWall(wallId: 'w2', startNodeId: 'n2', start: Vec2(4000, 0), endNodeId: 'n3', end: Vec2(4000, 3000)));
+      await h.session.syncNow();
+      return h;
+    }
+
+    test('a measurement taken offline reaches the server with its source, note and time', () async {
+      final h = await withWall();
+      h.controller.pointerDown(const Vec2(2000, 0));
+      h.controller.pointerUp(const Vec2(2000, 0));
+      h.controller.applyMeasurement(3800, source: MeasurementSource.manual, notes: 'tape, north wall', verified: true);
+      await h.session.flush();
+
+      await h.session.syncNow();
+
+      expect(h.session.status, SyncStatus.upToDate, reason: h.session.message);
+      final recorded = h.server.model.measurements.values.single;
+      expect((recorded.source, recorded.status, recorded.notes, recorded.valueMm), (MeasurementSource.manual, MeasurementStatus.verified, 'tape, north wall', 3800.0));
+      expect(h.server.model.fixedLengths['w1'], 4000);
+    });
+
+    test('a measurement made on another device is replayed with its history entry', () async {
+      final h = await withWall();
+
+      h.server.otherDeviceEdits(ApplyMeasurement(wallId: 'w2', valueMm: 2800, measurementId: 'theirs', source: MeasurementSource.laserBluetooth, capturedAt: DateTime.utc(2026, 11, 10, 9)));
+      await h.session.syncNow();
+
+      final history = h.controller.model.measurements['theirs']!;
+      expect((history.source, history.wallId), (MeasurementSource.laserBluetooth, 'w2'));
+      expect(h.controller.model.fixedLengths['w2'], 3000);
+      expect(h.session.message, isNull, reason: 'a plain replay');
+    });
+
+    test('a snapshot reload fetches the history from the server too', () async {
+      final h = await withWall();
+      h.server.otherDeviceEdits(ApplyMeasurement(wallId: 'w2', valueMm: 2800, measurementId: 'first', capturedAt: DateTime.utc(2026, 11, 10, 9)));
+      h.server.otherDeviceEdits(ApplyMeasurement(wallId: 'w2', valueMm: 2850, measurementId: 'second', notes: 'redone', capturedAt: DateTime.utc(2026, 11, 10, 10)));
+      h.server.snapshotOnlyPull = true;
+
+      await h.session.syncNow();
+
+      final model = h.controller.model;
+      expect(model.measurementsOf('w2').map((m) => m.id), ['second', 'first'], reason: 'newest first');
+      expect(model.measurements['first']!.status, MeasurementStatus.superseded);
+      expect(model.measurements['second']!.notes, 'redone');
+    });
+
+    test('a measurement taken offline on a plan that is later pushed twice is recorded once', () async {
+      final h = await withWall();
+      h.controller.pointerDown(const Vec2(2000, 0));
+      h.controller.pointerUp(const Vec2(2000, 0));
+      h.controller.applyMeasurement(3800);
+      await h.session.flush();
+      final operations = await h.outbox();
+
+      await h.api.push(operations);
+      await h.api.push(operations);
+
+      expect(h.server.model.measurements, hasLength(1));
+    });
+  });
+
   group('conflicts are resolved by the user, never merged silently', () {
     Future<Harness> conflicted() async {
       final h = await Harness.create();

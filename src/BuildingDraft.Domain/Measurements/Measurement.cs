@@ -34,7 +34,7 @@ public sealed class Measurement
 
     public static Measurement Record(
         Guid projectId, Guid variantId, Guid wallId, double valueMm, MeasurementReference reference,
-        MeasurementSource source, double? confidence, string? deviceName, string? notes, DateTimeOffset capturedAt)
+        MeasurementSource source, double? confidence, string? deviceName, string? notes, DateTimeOffset capturedAt, Guid? id = null)
     {
         if (valueMm <= 0)
             throw new DomainException("INVALID_MEASUREMENT", "Measurement must be positive.");
@@ -47,7 +47,7 @@ public sealed class Measurement
 
         return new()
         {
-            Id = Guid.CreateVersion7(),
+            Id = id ?? Guid.CreateVersion7(),
             ProjectId = projectId,
             VariantId = variantId,
             TargetObjectId = wallId,
