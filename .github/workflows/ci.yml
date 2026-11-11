@@ -65,7 +65,7 @@ jobs:
         with:
           flutter-version: 3.47.9
           cache: true
-      - name: Start the API (Development mode: one fixed user, migrates on start)
+      - name: "Start the API (Development mode, one fixed user, migrates on start)"
         run: |
           dotnet publish src/BuildingDraft.Api -c Release -o api
           ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5276 \
