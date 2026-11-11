@@ -26,6 +26,7 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
         ["SCAN_NOT_PROCESSED"] = StatusCodes.Status409Conflict,
         ["INVALID_SCAN"] = StatusCodes.Status400BadRequest,
         ["INVALID_SCAN_SOURCE"] = StatusCodes.Status400BadRequest,
+        ["USER_INACTIVE"] = StatusCodes.Status403Forbidden,
         ["INVALID_NAME"] = StatusCodes.Status400BadRequest
     };
 

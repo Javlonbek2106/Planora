@@ -534,6 +534,46 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
                     b.ToTable("scan_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("BuildingDraft.Domain.Users.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("ExternalSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("external_subject");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("ExternalSubject")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_external_subject");
+
+                    b.ToTable("users", (string)null);
+                });
+
             modelBuilder.Entity("BuildingDraft.Infrastructure.Persistence.ConstraintRow", b =>
                 {
                     b.Property<Guid>("GeometryVersionId")

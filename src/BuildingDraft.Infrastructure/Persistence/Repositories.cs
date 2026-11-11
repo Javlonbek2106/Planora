@@ -5,7 +5,9 @@ using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using BuildingDraft.Domain.Scans;
+using BuildingDraft.Domain.Users;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using Npgsql;
 
 namespace BuildingDraft.Infrastructure.Persistence;
@@ -135,9 +137,17 @@ public sealed class EfScanSessionRepository(BuildingDraftDbContext db) : IScanSe
     public void Add(ScanSession session) => db.ScanSessions.Add(session);
 }
 
+public sealed class EfUserRepository(BuildingDraftDbContext db) : IUserRepository
+{
+    public Task<User?> FindBySubjectAsync(string externalSubject, CancellationToken ct) =>
+        db.Users.FirstOrDefaultAsync(u => u.ExternalSubject == externalSubject, ct);
+
+    public void Add(User user) => db.Users.Add(user);
+}
+
 public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork
 {
-    const string UniqueViolation = "23505";
+    const string PostgresUniqueViolation = "23505";
 
     public async Task SaveChangesAsync(CancellationToken ct)
     {
@@ -145,10 +155,17 @@ public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (Exception ex) when (ex is DbUpdateConcurrencyException
-                                       || ex is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation } })
+        catch (Exception ex) when (ex is DbUpdateConcurrencyException || ex is DbUpdateException update && IsUniqueViolation(update))
         {
             throw new DomainException("VERSION_CONFLICT", "The data was changed by another request. Reload and retry.");
         }
     }
+
+    // SQLite is only used by the test suite; it reports unique violations through the message.
+    static bool IsUniqueViolation(DbUpdateException ex) => ex.InnerException switch
+    {
+        PostgresException { SqlState: PostgresUniqueViolation } => true,
+        DbException e => e.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase),
+        _ => false
+    };
 }

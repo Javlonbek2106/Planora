@@ -3,6 +3,7 @@ using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using BuildingDraft.Domain.Scans;
+using BuildingDraft.Domain.Users;
 
 namespace BuildingDraft.Domain.Abstractions;
 
@@ -67,4 +68,10 @@ public interface IScanSessionRepository
 {
     Task<ScanSession?> FindAsync(Guid sessionId, Guid ownerId, CancellationToken ct);
     void Add(ScanSession session);
+}
+
+public interface IUserRepository
+{
+    Task<User?> FindBySubjectAsync(string externalSubject, CancellationToken ct);
+    void Add(User user);
 }

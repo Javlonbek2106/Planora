@@ -102,6 +102,19 @@ Command nomlari: `create_wall`, `move_wall`, `resize_wall`, `update_wall`, `spli
 
 Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflictingConstraintIds? }`.
 
+## Autentifikatsiya
+
+Server login/parol saqlamaydi: tashqi identity provider (Keycloak, Auth0, Entra ID va h.k.) chiqargan **JWT Bearer** tokenini tekshiradi. Foydalanuvchi `sub` claim'i bo'yicha `users` jadvalida birinchi so'rovda avtomatik yaratiladi; nofaol foydalanuvchi `403 USER_INACTIVE`.
+
+| Sozlama | Ma'nosi |
+|---|---|
+| `Auth:Mode` | `Jwt` (default, xavfsiz) yoki `Dev` (bitta soxta foydalanuvchi; faqat `Development` muhitida, boshqa joyda ilova ishga tushmaydi) |
+| `Auth:Authority` | OpenID Connect provider manzili (kalitlar avtomatik olinadi) |
+| `Auth:SigningKey` | Authority o'rniga umumiy maxfiy kalit (kamida 32 bayt) |
+| `Auth:Audience`, `Auth:Issuer` | Token tekshiruvi |
+
+Maxfiy kalitni source code yoki mobil ilovaga yozmang: muhit o'zgaruvchisi (`Auth__SigningKey`) orqali bering.
+
 ## Qabul qilingan qarorlar
 
 - Pagination: `page`/`pageSize` (PRD 17.6 da tanlanmagan edi).
@@ -116,6 +129,6 @@ Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflic
 - Serverda foto/video bo'yicha AI inference (scan-session faqat tayyor AR/LiDAR/AI geometriyani import qiladi).
 - Export: PNG/FBX/DWG/IFC; job hozir so'rov ichida bajariladi (kontrakt async-ga tayyor, background worker yo'q); PDF'da Latin-1 dan tashqari belgilar `?` bo'ladi; DXF R12 (qo'shimcha birlik o'zgaruvchisi yo'q, birlik sarlavha izohida).
 - Sync: oddiy metadata uchun last-write-wins (loyiha nomi va h.k. hozir faqat online).
-- Autentifikatsiya: hozir bitta sozlangan dev foydalanuvchi (`DevCurrentUser`), `users` jadvali yo'q.
+- Token chiqarish (login/parol/ro'yxatdan o'tish): server faqat tashqi identity provider tokenini tekshiradi.
 - Constraint `priority`, node `z` koordinatasi, `GeometryOperation` dan versiyani qayta qurish.
 - Flutter ilova, AR/LiDAR, Bluetooth lazer adapteri, PoC'lar (PRD Phase 0).

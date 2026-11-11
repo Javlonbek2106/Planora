@@ -20,7 +20,7 @@ builder.Services
     .AddInfrastructure(builder.Configuration.GetConnectionString("Default")
                        ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured."),
         Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Storage:Root"] ?? "storage"))
-    .AddScoped<ICurrentUser, DevCurrentUser>()
+    .AddApiAuthentication(builder.Configuration, builder.Environment)
     .AddExceptionHandler<DomainExceptionHandler>()
     .AddProblemDetails();
 
@@ -35,6 +35,14 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 app.UseExceptionHandler();
 
 var api = app.MapGroup("/api/v1");
+if (!app.Configuration.IsDevMode())
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseMiddleware<UserProvisioningMiddleware>();
+    api.RequireAuthorization();
+}
+
 api.MapProjects();
 api.MapVariants();
 api.MapGeometry();

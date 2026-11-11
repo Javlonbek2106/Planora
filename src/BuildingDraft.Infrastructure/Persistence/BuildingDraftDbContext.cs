@@ -2,6 +2,7 @@ using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using BuildingDraft.Domain.Scans;
+using BuildingDraft.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,6 +16,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
     public DbSet<Measurement> Measurements => Set<Measurement>();
     public DbSet<ExportJob> ExportJobs => Set<ExportJob>();
     public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
+    public DbSet<User> Users => Set<User>();
     public DbSet<ScanSession> ScanSessions => Set<ScanSession>();
     public DbSet<NodeRow> Nodes => Set<NodeRow>();
     public DbSet<WallRow> Walls => Set<WallRow>();
@@ -31,6 +33,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
         modelBuilder.ConfigureMeasurements();
         modelBuilder.ConfigureExports();
         modelBuilder.ConfigureScans();
+        modelBuilder.ConfigureUsers();
     }
 }
 
@@ -225,6 +228,20 @@ static class ModelConfiguration
             e.HasOne<Project>().WithMany().HasForeignKey(s => s.ProjectId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<DesignVariant>().WithMany().HasForeignKey(s => s.VariantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Floor>().WithMany().HasForeignKey(s => s.FloorId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    public static void ConfigureUsers(this ModelBuilder model)
+    {
+        model.Entity<User>(e =>
+        {
+            e.ToTable("users");
+            e.HasKey(u => u.Id);
+            e.Property(u => u.Id).ValueGeneratedNever();
+            e.Property(u => u.ExternalSubject).HasMaxLength(256);
+            e.Property(u => u.Email).HasMaxLength(320);
+            e.Property(u => u.DisplayName).HasMaxLength(200);
+            e.HasIndex(u => u.ExternalSubject).IsUnique();
         });
     }
 
