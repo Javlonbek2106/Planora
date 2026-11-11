@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 
 namespace BuildingDraft.Application;
@@ -90,4 +91,42 @@ public sealed record GeometryDto(
             [..model.Constraints],
             new(Total(RoomAreaType.Enclosed), Total(RoomAreaType.OpenArea)));
     }
+}
+
+public sealed record CreateMeasurementRequest(
+    Guid VariantId,
+    Guid TargetObjectId,
+    double ValueMm,
+    MeasurementSource Source,
+    MeasurementReference Reference = MeasurementReference.Inner,
+    double? Confidence = null,
+    string? DeviceName = null,
+    string? Notes = null,
+    DateTimeOffset? CapturedAt = null);
+
+public sealed record ChangeMeasurementStatusRequest(MeasurementStatus Status);
+
+public sealed record ApplyMeasurementRequest(Guid ClientOperationId, int ExpectedVersion, string? DeviceId = null);
+
+public sealed record MeasurementDto(
+    Guid Id,
+    Guid ProjectId,
+    Guid VariantId,
+    Guid TargetObjectId,
+    string TargetProperty,
+    double ValueMm,
+    MeasurementReference Reference,
+    MeasurementSource Source,
+    MeasurementStatus Status,
+    bool IsEstimate,
+    double? Confidence,
+    string? DeviceName,
+    string? Notes,
+    DateTimeOffset CapturedAt,
+    bool IsApplied,
+    int? AppliedVersionNumber)
+{
+    public static MeasurementDto From(Measurement m) => new(
+        m.Id, m.ProjectId, m.VariantId, m.TargetObjectId, m.TargetProperty, m.ValueMm, m.Reference, m.Source, m.Status,
+        m.IsEstimate, m.Confidence, m.DeviceName, m.Notes, m.CapturedAt, m.IsApplied, m.AppliedVersionNumber);
 }

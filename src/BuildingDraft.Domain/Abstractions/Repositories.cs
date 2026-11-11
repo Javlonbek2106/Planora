@@ -1,4 +1,5 @@
 using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 
 namespace BuildingDraft.Domain.Abstractions;
@@ -32,4 +33,11 @@ public interface IUnitOfWork
 {
     // Throws DomainException(VERSION_CONFLICT) when another writer won the race.
     Task SaveChangesAsync(CancellationToken ct);
+}
+
+public interface IMeasurementRepository
+{
+    Task<Measurement?> FindAsync(Guid measurementId, Guid ownerId, CancellationToken ct);
+    Task<IReadOnlyList<Measurement>> ListAsync(Guid projectId, Guid? variantId, Guid? targetObjectId, CancellationToken ct);
+    void Add(Measurement measurement);
 }

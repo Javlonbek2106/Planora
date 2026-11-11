@@ -1,6 +1,7 @@
 using BuildingDraft.Domain;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -75,6 +76,25 @@ public sealed class EfGeometryOperationRepository(BuildingDraftDbContext db) : I
         db.GeometryOperations.AsNoTracking().FirstOrDefaultAsync(o => o.ClientOperationId == clientOperationId, ct);
 
     public void Add(GeometryOperation operation) => db.GeometryOperations.Add(operation);
+}
+
+public sealed class EfMeasurementRepository(BuildingDraftDbContext db) : IMeasurementRepository
+{
+    public Task<Measurement?> FindAsync(Guid measurementId, Guid ownerId, CancellationToken ct) =>
+        (from m in db.Measurements
+         join p in db.Projects on m.ProjectId equals p.Id
+         where m.Id == measurementId && p.OwnerId == ownerId
+         select m).FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<Measurement>> ListAsync(Guid projectId, Guid? variantId, Guid? targetObjectId, CancellationToken ct) =>
+        await db.Measurements
+            .Where(m => m.ProjectId == projectId
+                        && (variantId == null || m.VariantId == variantId)
+                        && (targetObjectId == null || m.TargetObjectId == targetObjectId))
+            .OrderBy(m => m.Id)
+            .ToListAsync(ct);
+
+    public void Add(Measurement measurement) => db.Measurements.Add(measurement);
 }
 
 public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork

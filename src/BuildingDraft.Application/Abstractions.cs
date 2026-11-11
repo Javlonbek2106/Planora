@@ -1,5 +1,6 @@
 using BuildingDraft.Domain;
 using BuildingDraft.Domain.Abstractions;
+using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 
 namespace BuildingDraft.Application;
@@ -20,6 +21,9 @@ static class RepositoryExtensions
 
     public static async Task<Project> GetByFloorAsync(this IProjectRepository repository, Guid floorId, Guid ownerId, CancellationToken ct) =>
         await repository.FindByFloorAsync(floorId, ownerId, ct) ?? throw NotFound("Floor");
+
+    public static async Task<Measurement> GetAsync(this IMeasurementRepository repository, Guid measurementId, Guid ownerId, CancellationToken ct) =>
+        await repository.FindAsync(measurementId, ownerId, ct) ?? throw NotFound("Measurement");
 
     static DomainException NotFound(string what) => new("NOT_FOUND", $"{what} not found.");
 }

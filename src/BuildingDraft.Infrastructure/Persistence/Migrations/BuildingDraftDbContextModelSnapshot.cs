@@ -22,6 +22,89 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BuildingDraft.Domain.Measurements.Measurement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("AppliedVersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("applied_version_number");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision")
+                        .HasColumnName("confidence");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("device_name");
+
+                    b.Property<bool>("IsApplied")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_applied");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetObjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_object_id");
+
+                    b.Property<string>("TargetProperty")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("target_property");
+
+                    b.Property<double>("ValueMm")
+                        .HasColumnType("double precision")
+                        .HasColumnName("value_mm");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_measurements");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_measurements_project_id");
+
+                    b.HasIndex("VariantId", "TargetObjectId")
+                        .HasDatabaseName("ix_measurements_variant_id_target_object_id");
+
+                    b.ToTable("measurements", (string)null);
+                });
+
             modelBuilder.Entity("BuildingDraft.Domain.Projects.DesignVariant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -491,6 +574,23 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_walls_geometry_version_id_start_node_id");
 
                     b.ToTable("walls", (string)null);
+                });
+
+            modelBuilder.Entity("BuildingDraft.Domain.Measurements.Measurement", b =>
+                {
+                    b.HasOne("BuildingDraft.Domain.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_measurements_projects_project_id");
+
+                    b.HasOne("BuildingDraft.Domain.Projects.DesignVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_measurements_design_variants_variant_id");
                 });
 
             modelBuilder.Entity("BuildingDraft.Domain.Projects.DesignVariant", b =>

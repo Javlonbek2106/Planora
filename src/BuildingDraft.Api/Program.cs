@@ -37,6 +37,7 @@ var api = app.MapGroup("/api/v1");
 api.MapProjects();
 api.MapVariants();
 api.MapGeometry();
+api.MapMeasurements();
 
 app.Run();
 
