@@ -75,6 +75,12 @@ public sealed class EfGeometryOperationRepository(BuildingDraftDbContext db) : I
     public Task<GeometryOperation?> FindByClientIdAsync(Guid clientOperationId, CancellationToken ct) =>
         db.GeometryOperations.AsNoTracking().FirstOrDefaultAsync(o => o.ClientOperationId == clientOperationId, ct);
 
+    public async Task<IReadOnlyList<GeometryOperation>> ListSinceAsync(Guid variantId, int afterVersion, CancellationToken ct) =>
+        await db.GeometryOperations.AsNoTracking()
+            .Where(o => o.VariantId == variantId && o.ResultVersionNumber > afterVersion)
+            .OrderBy(o => o.ResultVersionNumber)
+            .ToListAsync(ct);
+
     public void Add(GeometryOperation operation) => db.GeometryOperations.Add(operation);
 }
 

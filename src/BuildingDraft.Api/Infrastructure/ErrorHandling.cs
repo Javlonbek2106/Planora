@@ -20,6 +20,7 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
         ["INVALID_COMMAND_PAYLOAD"] = StatusCodes.Status400BadRequest,
         ["MEASUREMENT_STATUS_FINAL"] = StatusCodes.Status409Conflict,
         ["INVALID_STATUS_TRANSITION"] = StatusCodes.Status409Conflict,
+        ["INVALID_RESOLUTION"] = StatusCodes.Status400BadRequest,
         ["INVALID_NAME"] = StatusCodes.Status400BadRequest
     };
 

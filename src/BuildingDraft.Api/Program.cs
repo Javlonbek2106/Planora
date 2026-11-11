@@ -38,6 +38,7 @@ api.MapProjects();
 api.MapVariants();
 api.MapGeometry();
 api.MapMeasurements();
+api.MapSync();
 
 app.Run();
 

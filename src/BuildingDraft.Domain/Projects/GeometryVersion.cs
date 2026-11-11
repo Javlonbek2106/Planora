@@ -29,6 +29,8 @@ public sealed class GeometryVersion
 // The log of applied commands. ClientOperationId makes retries and offline sync idempotent.
 public sealed class GeometryOperation
 {
+    public const string RestoreCommand = "restore_geometry_version";
+
     GeometryOperation()
     {
     }

@@ -12,13 +12,11 @@ public sealed class GeometryService(
     IProjectRepository projects,
     IGeometryVersionRepository versions,
     IGeometryOperationRepository operations,
+    GeometryVersionWriter writer,
     IUnitOfWork unitOfWork,
     GeometryProcessor processor,
-    ICurrentUser user,
-    TimeProvider clock)
+    ICurrentUser user)
 {
-    const string RestoreCommand = "restore_geometry_version";
-
     public async Task<GeometryDto> GetAsync(Guid variantId, int? versionNumber, CancellationToken ct)
     {
         var (_, variant) = await OpenAsync(variantId, ct);
@@ -77,7 +75,7 @@ public sealed class GeometryService(
         var (parent, _) = await LoadCurrentAsync(variant, ct);
         var model = await versions.LoadModelAsync(target.Id, ct);
         return await CommitAsync(project, variant, parent, model, request.ClientOperationId, request.ExpectedVersion,
-            RestoreCommand, JsonSerializer.Serialize(new { versionId }), null, [], ct);
+            GeometryOperation.RestoreCommand, JsonSerializer.Serialize(new { versionId }), null, [], ct);
     }
 
     async Task<(Project Project, DesignVariant Variant)> OpenAsync(Guid variantId, CancellationToken ct)
@@ -108,15 +106,10 @@ public sealed class GeometryService(
         Guid clientOperationId, int expectedVersion, string commandType, string payload, string? deviceId,
         IReadOnlyList<ValidationIssue> warnings, CancellationToken ct)
     {
-        project.EnsureFloorsExist(model.Nodes.Values.Select(n => n.FloorId).Concat(model.Rooms.Values.Select(r => r.FloorId)));
-
-        var now = clock.GetUtcNow();
-        var next = variant.AdvanceVersion(expectedVersion);
-        var version = GeometryVersion.Create(variant.Id, next, parent.Id, model.ComputeHash(), now);
-        versions.Add(version, model);
-        operations.Add(GeometryOperation.Record(project.Id, version, clientOperationId, commandType, payload, deviceId, now));
+        var version = writer.Stage(project, variant, parent, model,
+            new(clientOperationId, expectedVersion, commandType, payload, deviceId));
         await unitOfWork.SaveChangesAsync(ct);
 
-        return new(true, next, clientOperationId, new(true, warnings, []));
+        return new(true, version.VersionNumber, clientOperationId, new(true, warnings, []));
     }
 }

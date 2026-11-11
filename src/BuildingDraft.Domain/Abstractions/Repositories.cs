@@ -26,6 +26,7 @@ public interface IGeometryVersionRepository
 public interface IGeometryOperationRepository
 {
     Task<GeometryOperation?> FindByClientIdAsync(Guid clientOperationId, CancellationToken ct);
+    Task<IReadOnlyList<GeometryOperation>> ListSinceAsync(Guid variantId, int afterVersion, CancellationToken ct);
     void Add(GeometryOperation operation);
 }
 
