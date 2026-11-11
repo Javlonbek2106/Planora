@@ -18,7 +18,7 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
-      - run: dotnet test --no-build -c Release
+      - run: dotnet test --no-build -c Release --logger "console;verbosity=detailed"
       # Fails when the model changed but nobody added a migration.
       - run: dotnet tool restore
       - run: dotnet tool run dotnet-ef migrations has-pending-model-changes -p src/BuildingDraft.Infrastructure -s src/BuildingDraft.Api
