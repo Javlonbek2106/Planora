@@ -15,10 +15,11 @@ using Microsoft.Extensions.Hosting;
 
 namespace BuildingDraft.Api.Tests;
 
-// Runs the real HTTP pipeline against an in-memory SQLite database.
-public sealed class ApiFactory : WebApplicationFactory<Program>
+// Runs the real HTTP pipeline (including the background export worker) against a SQLite file. A file, not a shared
+// in-memory connection: requests and the worker run on different threads and each needs its own connection.
+public class ApiFactory : WebApplicationFactory<Program>
 {
-    readonly SqliteConnection connection = new("DataSource=:memory:");
+    readonly string databasePath = Path.Combine(Path.GetTempPath(), $"building-draft-{Guid.NewGuid():N}.db");
 
     public Guid UserId { get; set; } = Guid.NewGuid();
 
@@ -29,13 +30,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        connection.Open();
         builder.UseSetting("Database:MigrateOnStartup", "false");
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<BuildingDraftDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<BuildingDraftDbContext>>();
-            services.AddDbContext<BuildingDraftDbContext>(o => o.UseSqlite(connection).UseSnakeCaseNamingConvention());
+            services.AddDbContext<BuildingDraftDbContext>(o => o.UseSqlite($"Data Source={databasePath}").UseSnakeCaseNamingConvention());
             services.RemoveAll<IFileStorage>();
             services.AddSingleton<IFileStorage, InMemoryFileStorage>();
             services.RemoveAll<ICurrentUser>();
@@ -54,8 +54,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing)
-            connection.Dispose();
+        if (!disposing)
+            return;
+        SqliteConnection.ClearAllPools();
+        File.Delete(databasePath);
     }
 }
 

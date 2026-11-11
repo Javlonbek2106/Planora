@@ -23,6 +23,7 @@ public static class DependencyInjection
         .AddScoped<MeasurementService>()
         .AddScoped<SyncService>()
         .AddScoped<ExportService>()
+        .AddScoped<ExportRunner>()
         .AddScoped<ScanService>()
         .AddScoped<UserService>();
     }

@@ -11,6 +11,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString, string storageRoot) => services
         .AddDbContext<BuildingDraftDbContext>(o => o.UseNpgsql(connectionString).UseSnakeCaseNamingConvention())
         .AddSingleton<IFileStorage>(new LocalFileStorage(storageRoot))
+        .AddSingleton<IExportQueue, ChannelExportQueue>()
         .AddRepositories();
 
     public static IServiceCollection AddRepositories(this IServiceCollection services) => services

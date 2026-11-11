@@ -47,7 +47,7 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
             message = domain.Message,
             traceId = context.TraceIdentifier,
             errors = failure?.Errors,
-            conflictingConstraintIds = failure?.ConflictingConstraintIds
+            conflicts = failure?.Conflicts
         }, ct);
         return true;
     }

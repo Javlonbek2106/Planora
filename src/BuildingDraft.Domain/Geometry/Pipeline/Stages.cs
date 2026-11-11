@@ -7,10 +7,14 @@ public sealed class SolveConstraintsStage : IGeometryStage
     public GeometryFailure? Run(StageContext context)
     {
         var result = ConstraintSolver.Solve(context.Candidate, context.Before);
-        return result.Converged
-            ? null
-            : new("GEOMETRY_CONSTRAINT_CONFLICT", "Geometry constraints cannot be satisfied.",
-                ConflictingConstraintIds: result.ConflictingConstraintIds);
+        if (result.Converged)
+            return null;
+
+        var conflicts = result.ConflictingConstraintIds
+            .Select(id => context.Candidate.Constraints.First(c => c.Id == id))
+            .Select(c => new ConstraintConflict(c.Id, c.Type, $"The {c.Type} constraint conflicts with the connected geometry."))
+            .ToList();
+        return new("GEOMETRY_CONSTRAINT_CONFLICT", "Geometry constraints cannot be satisfied.", Conflicts: conflicts);
     }
 }
 

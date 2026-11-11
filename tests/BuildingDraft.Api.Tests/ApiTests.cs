@@ -248,4 +248,35 @@ public class ApiTests : IClassFixture<ApiFactory>
         Assert.Contains(after.GetProperty("constraints").EnumerateArray(),
             c => c.GetProperty("type").GetString() == "fixed_length" && c.GetProperty("value").GetDouble() == 4100);
     }
+
+    [Fact]
+    public async Task A_constraint_conflict_names_the_conflicting_constraints_with_type_and_message()
+    {
+        var (_, variantId, floorId) = await api.CreateProjectWithFloor();
+        var version = await api.DrawRoom(variantId, floorId, 4000, 3000);
+        var geometry = await ApiClient.Body(await api.Get($"/api/v1/variants/{variantId}/geometry"));
+        // Boundary order: bottom, right, top, left.
+        var walls = geometry.GetProperty("rooms")[0].GetProperty("room").GetProperty("boundaryWallIds").EnumerateArray().Select(w => w.GetGuid()).ToList();
+
+        foreach (var (type, wall) in new[] { ("horizontal", walls[0]), ("vertical", walls[1]), ("horizontal", walls[2]), ("vertical", walls[3]) })
+            version = (await ApiClient.Body(await api.Command(variantId, version, "add_constraint",
+                new { constraintId = Guid.NewGuid(), type, targets = new[] { wall } }))).GetProperty("version").GetInt32();
+        version = (await ApiClient.Body(await api.Command(variantId, version, "add_constraint",
+            new { constraintId = Guid.NewGuid(), type = "fixed_length", targets = new[] { walls[0] }, value = 4000 }))).GetProperty("version").GetInt32();
+
+        var response = await api.Command(variantId, version, "add_constraint",
+            new { constraintId = Guid.NewGuid(), type = "fixed_length", targets = new[] { walls[2] }, value = 5000 });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await ApiClient.Body(response);
+        Assert.Equal("GEOMETRY_CONSTRAINT_CONFLICT", body.GetProperty("errorCode").GetString());
+        var conflicts = body.GetProperty("conflicts").EnumerateArray().ToList();
+        Assert.NotEmpty(conflicts);
+        Assert.All(conflicts, c =>
+        {
+            Assert.NotEqual(Guid.Empty, c.GetProperty("constraintId").GetGuid());
+            Assert.Matches("^[a-z_]+$", c.GetProperty("type").GetString()!);
+            Assert.Contains("conflicts with the connected geometry", c.GetProperty("message").GetString());
+        });
+    }
 }

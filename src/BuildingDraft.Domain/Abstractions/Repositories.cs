@@ -11,6 +11,7 @@ namespace BuildingDraft.Domain.Abstractions;
 public interface IProjectRepository
 {
     Task<Project?> FindAsync(Guid projectId, Guid ownerId, CancellationToken ct);
+    Task<Project?> FindByIdAsync(Guid projectId, CancellationToken ct);
     Task<Project?> FindByVariantAsync(Guid variantId, Guid ownerId, CancellationToken ct);
     Task<Project?> FindByFloorAsync(Guid floorId, Guid ownerId, CancellationToken ct);
     Task<(IReadOnlyList<Project> Items, int Total)> ListAsync(Guid ownerId, int page, int pageSize, CancellationToken ct);
@@ -49,6 +50,8 @@ public interface IMeasurementRepository
 public interface IExportJobRepository
 {
     Task<ExportJob?> FindAsync(Guid jobId, Guid ownerId, CancellationToken ct);
+    Task<ExportJob?> FindByIdAsync(Guid jobId, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> ListUnfinishedIdsAsync(CancellationToken ct);
     void Add(ExportJob job);
 }
 
@@ -74,4 +77,11 @@ public interface IUserRepository
 {
     Task<User?> FindBySubjectAsync(string externalSubject, CancellationToken ct);
     void Add(User user);
+}
+
+// Port to the background worker; the job id is all it needs, the job itself lives in the database.
+public interface IExportQueue
+{
+    ValueTask EnqueueAsync(Guid jobId, CancellationToken ct);
+    IAsyncEnumerable<Guid> ReadAllAsync(CancellationToken ct);
 }

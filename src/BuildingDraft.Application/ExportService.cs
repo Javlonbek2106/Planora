@@ -13,6 +13,7 @@ public sealed class ExportService(
     IProjectFileRepository files,
     IFileStorage storage,
     IEnumerable<IGeometryExporter> exporters,
+    IExportQueue queue,
     IUnitOfWork unitOfWork,
     ICurrentUser user,
     TimeProvider clock)
@@ -27,25 +28,12 @@ public sealed class ExportService(
         if (request.FloorId is { } floorId)
             project.EnsureFloorsExist([floorId]);
 
-        var now = clock.GetUtcNow();
-        var job = ExportJob.Create(project.Id, version.Id, request.Format, JsonSerializer.Serialize(new { floorId = request.FloorId }), now);
+        var job = ExportJob.Create(project.Id, version.Id, request.Format,
+            JsonSerializer.Serialize(new ExportOptions(request.FloorId), GeometryJson.Options), clock.GetUtcNow());
         jobs.Add(job);
-
-        try
-        {
-            var model = await versions.LoadModelAsync(version.Id, ct);
-            var content = exporter.Export(new(model, project.Floors, request.FloorId, project.Name, version.VersionNumber));
-            var file = ProjectFile.Create(project.Id, version.Id, FileName(project, version, exporter), exporter.ContentType, content, now);
-            await storage.SaveAsync(file.StorageKey, content, ct);
-            files.Add(file);
-            job.Complete(file.Id, clock.GetUtcNow());
-        }
-        catch (DomainException ex)
-        {
-            job.Fail(ex.Code, ex.Message, clock.GetUtcNow());
-        }
-
         await unitOfWork.SaveChangesAsync(ct);
+
+        await queue.EnqueueAsync(job.Id, ct);
         return ExportJobDto.From(job);
     }
 
@@ -61,11 +49,5 @@ public sealed class ExportService(
         var file = await files.FindAsync(fileId, ct) ?? throw new DomainException("NOT_FOUND", "File not found.");
         var content = await storage.ReadAsync(file.StorageKey, ct) ?? throw new DomainException("NOT_FOUND", "File content not found.");
         return new(content, file.ContentType, file.FileName);
-    }
-
-    static string FileName(Project project, GeometryVersion version, IGeometryExporter exporter)
-    {
-        var name = new string(project.Name.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray());
-        return $"{name}_v{version.VersionNumber}.{exporter.Extension}";
     }
 }

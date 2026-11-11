@@ -85,7 +85,9 @@ public class GeometryEngineTests
 
         Assert.False(outcome.Success);
         Assert.Equal("GEOMETRY_CONSTRAINT_CONFLICT", outcome.Failure!.Code);
-        Assert.NotEmpty(outcome.Failure.ConflictingConstraintIds!);
+        Assert.NotEmpty(outcome.Failure.Conflicts!);
+        // The solver lists the constraints it could not satisfy (here the verticals give way), each with a message.
+        Assert.All(outcome.Failure.Conflicts!, c => Assert.False(string.IsNullOrWhiteSpace(c.Message)));
     }
 
     [Fact]
@@ -112,7 +114,7 @@ public class GeometryEngineTests
         var outcome = f.Run(new MoveWall(f.Walls[0], 0, 100));
 
         Assert.Equal("GEOMETRY_CONSTRAINT_CONFLICT", outcome.Failure!.Code);
-        Assert.Contains(Id(30), outcome.Failure.ConflictingConstraintIds!);
+        Assert.Contains(outcome.Failure.Conflicts!, c => c.ConstraintId == Id(30) && c.Type == ConstraintType.FixedPoint);
     }
 
     [Fact]

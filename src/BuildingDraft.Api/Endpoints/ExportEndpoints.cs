@@ -9,7 +9,7 @@ public static class ExportEndpoints
         api.MapPost("/geometry-versions/{versionId:guid}/exports", async (Guid versionId, CreateExportRequest r, ExportService s, CancellationToken ct) =>
         {
             var job = await s.CreateAsync(versionId, r, ct);
-            return Results.Created($"/api/v1/exports/{job.Id}", job);
+            return Results.Accepted($"/api/v1/exports/{job.Id}", job);
         });
 
         api.MapGet("/exports/{id:guid}", (Guid id, ExportService s, CancellationToken ct) => s.GetAsync(id, ct));

@@ -20,6 +20,9 @@ public sealed class EfProjectRepository(BuildingDraftDbContext db) : IProjectRep
     public Task<Project?> FindAsync(Guid projectId, Guid ownerId, CancellationToken ct) =>
         Owned(ownerId).FirstOrDefaultAsync(p => p.Id == projectId, ct);
 
+    public Task<Project?> FindByIdAsync(Guid projectId, CancellationToken ct) =>
+        db.Projects.Include(p => p.Floors).Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == projectId, ct);
+
     public Task<Project?> FindByVariantAsync(Guid variantId, Guid ownerId, CancellationToken ct) =>
         Owned(ownerId).FirstOrDefaultAsync(p => p.Variants.Any(v => v.Id == variantId), ct);
 
@@ -114,6 +117,16 @@ public sealed class EfExportJobRepository(BuildingDraftDbContext db) : IExportJo
          join p in db.Projects on j.ProjectId equals p.Id
          where j.Id == jobId && p.OwnerId == ownerId
          select j).FirstOrDefaultAsync(ct);
+
+    public Task<ExportJob?> FindByIdAsync(Guid jobId, CancellationToken ct) =>
+        db.ExportJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+
+    public async Task<IReadOnlyList<Guid>> ListUnfinishedIdsAsync(CancellationToken ct) =>
+        await db.ExportJobs
+            .Where(j => j.Status == ExportStatus.Pending || j.Status == ExportStatus.Processing)
+            .OrderBy(j => j.Id)
+            .Select(j => j.Id)
+            .ToListAsync(ct);
 
     public void Add(ExportJob job) => db.ExportJobs.Add(job);
 }

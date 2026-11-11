@@ -2,11 +2,13 @@ using BuildingDraft.Domain.Geometry.Commands;
 
 namespace BuildingDraft.Domain.Geometry.Pipeline;
 
+public sealed record ConstraintConflict(Guid ConstraintId, ConstraintType Type, string Message);
+
 public sealed record GeometryFailure(
     string Code,
     string Message,
     IReadOnlyList<ValidationIssue>? Errors = null,
-    IReadOnlyList<Guid>? ConflictingConstraintIds = null);
+    IReadOnlyList<ConstraintConflict>? Conflicts = null);
 
 public sealed record CommandOutcome(GeometryModel? Model, IReadOnlyList<ValidationIssue> Warnings, GeometryFailure? Failure)
 {

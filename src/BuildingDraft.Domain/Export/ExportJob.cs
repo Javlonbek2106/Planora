@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace BuildingDraft.Domain.Export;
 
-public enum ExportStatus { Pending, Completed, Failed }
+public enum ExportStatus { Pending, Processing, Completed, Failed }
 
 // File metadata; the bytes live in file storage under StorageKey.
 public sealed class ProjectFile
@@ -70,6 +70,8 @@ public sealed class ExportJob
             Options = options,
             CreatedAt = now
         };
+
+    public void Start() => Status = ExportStatus.Processing;
 
     public void Complete(Guid fileId, DateTimeOffset now) =>
         (Status, ResultFileId, CompletedAt) = (ExportStatus.Completed, fileId, now);
