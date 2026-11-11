@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BuildingDraft.Api/BuildingDraft.Api.csproj" />
+    <Project Path="src/BuildingDraft.Domain/BuildingDraft.Domain.csproj" />
+    <Project Path="src/BuildingDraft.Infrastructure/BuildingDraft.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BuildingDraft.Api.Tests/BuildingDraft.Api.Tests.csproj" />
+    <Project Path="tests/BuildingDraft.Domain.Tests/BuildingDraft.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
