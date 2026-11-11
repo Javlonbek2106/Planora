@@ -8,8 +8,9 @@ namespace BuildingDraft.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString) => services
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString, string storageRoot) => services
         .AddDbContext<BuildingDraftDbContext>(o => o.UseNpgsql(connectionString).UseSnakeCaseNamingConvention())
+        .AddSingleton<IFileStorage>(new LocalFileStorage(storageRoot))
         .AddRepositories();
 
     public static IServiceCollection AddRepositories(this IServiceCollection services) => services
@@ -17,6 +18,8 @@ public static class DependencyInjection
         .AddScoped<IGeometryVersionRepository, EfGeometryVersionRepository>()
         .AddScoped<IGeometryOperationRepository, EfGeometryOperationRepository>()
         .AddScoped<IMeasurementRepository, EfMeasurementRepository>()
+        .AddScoped<IExportJobRepository, EfExportJobRepository>()
+        .AddScoped<IProjectFileRepository, EfProjectFileRepository>()
         .AddScoped<IUnitOfWork, EfUnitOfWork>();
 }
 

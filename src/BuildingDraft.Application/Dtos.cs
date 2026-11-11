@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
@@ -130,3 +131,22 @@ public sealed record MeasurementDto(
         m.Id, m.ProjectId, m.VariantId, m.TargetObjectId, m.TargetProperty, m.ValueMm, m.Reference, m.Source, m.Status,
         m.IsEstimate, m.Confidence, m.DeviceName, m.Notes, m.CapturedAt, m.IsApplied, m.AppliedVersionNumber);
 }
+
+public sealed record CreateExportRequest(ExportFormat Format, Guid? FloorId = null);
+
+public sealed record ExportJobDto(
+    Guid Id,
+    Guid VersionId,
+    ExportFormat Format,
+    ExportStatus Status,
+    Guid? ResultFileId,
+    string? ErrorCode,
+    string? ErrorMessage,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt)
+{
+    public static ExportJobDto From(ExportJob j) =>
+        new(j.Id, j.VersionId, j.Format, j.Status, j.ResultFileId, j.ErrorCode, j.ErrorMessage, j.CreatedAt, j.CompletedAt);
+}
+
+public sealed record ExportDownload(byte[] Content, string ContentType, string FileName);

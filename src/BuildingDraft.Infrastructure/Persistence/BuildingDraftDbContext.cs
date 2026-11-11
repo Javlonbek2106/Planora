@@ -1,3 +1,4 @@
+using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,8 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
     public DbSet<GeometryVersion> GeometryVersions => Set<GeometryVersion>();
     public DbSet<GeometryOperation> GeometryOperations => Set<GeometryOperation>();
     public DbSet<Measurement> Measurements => Set<Measurement>();
+    public DbSet<ExportJob> ExportJobs => Set<ExportJob>();
+    public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
     public DbSet<NodeRow> Nodes => Set<NodeRow>();
     public DbSet<WallRow> Walls => Set<WallRow>();
     public DbSet<RoomRow> Rooms => Set<RoomRow>();
@@ -24,6 +27,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
         modelBuilder.ConfigureGeometryHistory();
         modelBuilder.ConfigureGeometrySnapshot();
         modelBuilder.ConfigureMeasurements();
+        modelBuilder.ConfigureExports();
     }
 }
 
@@ -171,6 +175,36 @@ static class ModelConfiguration
             e.HasIndex(m => new { m.VariantId, m.TargetObjectId });
             e.HasOne<Project>().WithMany().HasForeignKey(m => m.ProjectId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<DesignVariant>().WithMany().HasForeignKey(m => m.VariantId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    public static void ConfigureExports(this ModelBuilder model)
+    {
+        model.Entity<ProjectFile>(e =>
+        {
+            e.ToTable("project_files");
+            e.HasKey(f => f.Id);
+            e.Property(f => f.Id).ValueGeneratedNever();
+            e.Property(f => f.FileName).HasMaxLength(260);
+            e.Property(f => f.ContentType).HasMaxLength(100);
+            e.Property(f => f.StorageKey).HasMaxLength(200);
+            e.Property(f => f.Checksum).HasMaxLength(64);
+            e.HasIndex(f => f.ProjectId);
+            e.HasOne<Project>().WithMany().HasForeignKey(f => f.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        model.Entity<ExportJob>(e =>
+        {
+            e.ToTable("export_jobs");
+            e.HasKey(j => j.Id);
+            e.Property(j => j.Id).ValueGeneratedNever();
+            e.Property(j => j.Format).HasConversion<string>().HasMaxLength(10);
+            e.Property(j => j.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(j => j.ErrorCode).HasMaxLength(100);
+            e.HasIndex(j => j.ProjectId);
+            e.HasOne<Project>().WithMany().HasForeignKey(j => j.ProjectId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<GeometryVersion>().WithMany().HasForeignKey(j => j.VersionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ProjectFile>().WithMany().HasForeignKey(j => j.ResultFileId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

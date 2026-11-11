@@ -71,6 +71,33 @@ Migratsiya yaratish: `dotnet tool restore && dotnet dotnet-ef migrations add <No
 | GET | `/variants/{id}/geometry/versions` |
 | POST | `/variants/{id}/geometry/versions/{versionId}/restore` |
 
+O'lchov (Measurement):
+
+| Metod | Yo'l |
+|---|---|
+| GET, POST | `/projects/{id}/measurements` (`variantId`, `targetObjectId` filtrlari) |
+| POST | `/measurements/{id}/apply` (devor uzunligini o'zgartiradi va `FixedLength` bilan mahkamlaydi) |
+| PUT | `/measurements/{id}/status` (`verified` / `rejected` / `superseded`) |
+
+AR/LiDAR va AI o'lchovlari taxmin hisoblanadi: ular hech qachon `verified` bo'lmaydi va aniq uzunlik sifatida qo'llanmaydi. Qiymat o'zgarmaydi, tarix o'chirilmaydi.
+
+Offline sync:
+
+| Metod | Yo'l |
+|---|---|
+| POST | `/sync/push` — operatsiyalar variant bo'yicha tartib bilan; birinchi konflikt/xatodan keyingilar to'xtatiladi |
+| POST | `/sync/pull` — klient versiyasidan keyingi o'zgarishlar yoki `snapshotRequired` |
+| POST | `/sync/resolve-conflict` — `keep_server` yoki `keep_mine` (hammasi-yoki-hech-narsa) |
+
+Export:
+
+| Metod | Yo'l |
+|---|---|
+| POST | `/geometry-versions/{id}/exports` — `{ format, floorId? }` |
+| GET | `/exports/{id}` (holat) · `/exports/{id}/download` |
+
+Formatlar: **SVG, DXF (R12), PDF, OBJ**. PNG, FBX, DWG, IFC hozircha `EXPORT_FORMAT_NOT_SUPPORTED` qaytaradi. Reja formatlari bitta qavatni chizadi (`floorId`, bitta qavat bo'lsa ixtiyoriy). OBJ metrda, Y yuqoriga; devorlar eshik/deraza atrofida bo'linadi. Fayllar ezdxf, pypdf va trimesh bilan mustaqil tekshirilgan.
+
 Command nomlari: `create_wall`, `move_wall`, `resize_wall`, `update_wall`, `split_wall`, `merge_walls`, `delete_wall`, `create_room`, `delete_room`, `merge_rooms`, `attach_opening`, `remove_opening`, `add_constraint`, `remove_constraint`, `apply_measurement`.
 
 Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflictingConstraintIds? }`.
@@ -86,7 +113,9 @@ Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflic
 
 ## Hali qilinmagan
 
-- Measurement API (`/measurements`, `apply`, `status`), scan-session, export job, sync (`push`/`pull`/`resolve-conflict`).
+- Scan-session API (AR/LiDAR/AI natijasini ko'rib chiqish va qo'llash).
+- Export: PNG/FBX/DWG/IFC; job hozir so'rov ichida bajariladi (kontrakt async-ga tayyor, background worker yo'q); PDF'da Latin-1 dan tashqari belgilar `?` bo'ladi; DXF R12 (qo'shimcha birlik o'zgaruvchisi yo'q, birlik sarlavha izohida).
+- Sync: oddiy metadata uchun last-write-wins (loyiha nomi va h.k. hozir faqat online).
 - Autentifikatsiya: hozir bitta sozlangan dev foydalanuvchi (`DevCurrentUser`), `users` jadvali yo'q.
 - Constraint `priority`, node `z` koordinatasi, `GeometryOperation` dan versiyani qayta qurish.
 - Flutter ilova, AR/LiDAR, Bluetooth lazer adapteri, PoC'lar (PRD Phase 0).

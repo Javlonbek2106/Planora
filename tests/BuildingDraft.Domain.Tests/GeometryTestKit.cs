@@ -14,15 +14,18 @@ public sealed class RoomFixture
     public Guid RoomId { get; } = Guid.Parse("c0000000-0000-0000-0000-000000000001");
     public GeometryModel Model { get; private set; } = new();
 
-    public RoomFixture(double thickness = 200, double[][]? corners = null)
+    public Guid FloorId { get; }
+
+    public RoomFixture(double thickness = 200, double[][]? corners = null, Guid? floorId = null)
     {
+        FloorId = floorId ?? Floor;
         corners ??= [[0, 0], [4000, 0], [4000, 3000], [0, 3000]];
         for (var i = 0; i < 4; i++)
         {
             var next = (i + 1) % 4;
-            Run(new CreateWall(Walls[i], Floor, Nodes[i], corners[i][0], corners[i][1], Nodes[next], corners[next][0], corners[next][1], thickness));
+            Run(new CreateWall(Walls[i], FloorId, Nodes[i], corners[i][0], corners[i][1], Nodes[next], corners[next][0], corners[next][1], thickness));
         }
-        Run(new CreateRoom(RoomId, Floor, "Living room", Walls, "living_room"));
+        Run(new CreateRoom(RoomId, FloorId, "Living room", Walls, "living_room"));
     }
 
     public CommandOutcome Run(IGeometryCommand command)

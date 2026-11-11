@@ -66,11 +66,20 @@ public static class RoomGeometry
 
         var centerline = edges.Select(e => model.Pos(e.From)).ToList();
         var signed = SignedArea(centerline);
-        var inner = InnerPolygon(centerline, edges.Select(e => e.Wall.ThicknessMm).ToList(), signed >= 0);
+        var inner = OffsetInward(centerline, edges.Select(e => e.Wall.ThicknessMm).ToList(), signed >= 0);
         return new(Math.Abs(SignedArea(inner)), Perimeter(inner), Math.Abs(signed));
     }
 
-    static double SignedArea(IReadOnlyList<Vec2> p)
+    // The room outline on the inner wall faces, or null when the boundary is not a closed loop.
+    public static IReadOnlyList<Vec2>? InnerPolygon(GeometryModel model, Room room)
+    {
+        if (!TryGetLoop(model, room, out var edges, out _))
+            return null;
+        var centerline = edges.Select(e => model.Pos(e.From)).ToList();
+        return OffsetInward(centerline, edges.Select(e => e.Wall.ThicknessMm).ToList(), SignedArea(centerline) >= 0);
+    }
+
+    public static double SignedArea(IReadOnlyList<Vec2> p)
     {
         var sum = 0.0;
         for (var i = 0; i < p.Count; i++)
@@ -82,7 +91,7 @@ public static class RoomGeometry
         Enumerable.Range(0, p.Count).Sum(i => (p[(i + 1) % p.Count] - p[i]).Length);
 
     // Offsets every centerline edge inward by half its wall thickness and mitres the corners.
-    static List<Vec2> InnerPolygon(IReadOnlyList<Vec2> p, IReadOnlyList<double> thickness, bool counterClockwise)
+    static List<Vec2> OffsetInward(IReadOnlyList<Vec2> p, IReadOnlyList<double> thickness, bool counterClockwise)
     {
         var n = p.Count;
         var dirs = new Vec2[n];

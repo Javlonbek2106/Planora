@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BuildingDraft.Application;
+using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -35,6 +36,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<BuildingDraftDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<BuildingDraftDbContext>>();
             services.AddDbContext<BuildingDraftDbContext>(o => o.UseSqlite(connection).UseSnakeCaseNamingConvention());
+            services.RemoveAll<IFileStorage>();
+            services.AddSingleton<IFileStorage, InMemoryFileStorage>();
             services.RemoveAll<ICurrentUser>();
             services.AddScoped<ICurrentUser>(_ => new FixedUser(this));
         });
@@ -53,6 +56,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing)
             connection.Dispose();
+    }
+}
+
+sealed class InMemoryFileStorage : IFileStorage
+{
+    readonly Dictionary<string, byte[]> files = [];
+
+    public Task SaveAsync(string key, byte[] content, CancellationToken ct)
+    {
+        lock (files)
+            files[key] = content;
+        return Task.CompletedTask;
+    }
+
+    public Task<byte[]?> ReadAsync(string key, CancellationToken ct)
+    {
+        lock (files)
+            return Task.FromResult(files.GetValueOrDefault(key));
     }
 }
 

@@ -1,3 +1,4 @@
+using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
@@ -41,4 +42,22 @@ public interface IMeasurementRepository
     Task<Measurement?> FindAsync(Guid measurementId, Guid ownerId, CancellationToken ct);
     Task<IReadOnlyList<Measurement>> ListAsync(Guid projectId, Guid? variantId, Guid? targetObjectId, CancellationToken ct);
     void Add(Measurement measurement);
+}
+
+public interface IExportJobRepository
+{
+    Task<ExportJob?> FindAsync(Guid jobId, Guid ownerId, CancellationToken ct);
+    void Add(ExportJob job);
+}
+
+public interface IProjectFileRepository
+{
+    Task<ProjectFile?> FindAsync(Guid fileId, CancellationToken ct);
+    void Add(ProjectFile file);
+}
+
+public interface IFileStorage
+{
+    Task SaveAsync(string key, byte[] content, CancellationToken ct);
+    Task<byte[]?> ReadAsync(string key, CancellationToken ct);
 }

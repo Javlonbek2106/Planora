@@ -22,6 +22,128 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BuildingDraft.Domain.Export.ExportJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("format");
+
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("options");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid?>("ResultFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("result_file_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_export_jobs");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_export_jobs_project_id");
+
+                    b.HasIndex("ResultFileId")
+                        .HasDatabaseName("ix_export_jobs_result_file_id");
+
+                    b.HasIndex("VersionId")
+                        .HasDatabaseName("ix_export_jobs_version_id");
+
+                    b.ToTable("export_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("BuildingDraft.Domain.Export.ProjectFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Checksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("checksum");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("file_name");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<Guid?>("VersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_files");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_project_files_project_id");
+
+                    b.ToTable("project_files", (string)null);
+                });
+
             modelBuilder.Entity("BuildingDraft.Domain.Measurements.Measurement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -574,6 +696,39 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_walls_geometry_version_id_start_node_id");
 
                     b.ToTable("walls", (string)null);
+                });
+
+            modelBuilder.Entity("BuildingDraft.Domain.Export.ExportJob", b =>
+                {
+                    b.HasOne("BuildingDraft.Domain.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_export_jobs_projects_project_id");
+
+                    b.HasOne("BuildingDraft.Domain.Export.ProjectFile", null)
+                        .WithMany()
+                        .HasForeignKey("ResultFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_export_jobs_project_files_result_file_id");
+
+                    b.HasOne("BuildingDraft.Domain.Projects.GeometryVersion", null)
+                        .WithMany()
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_export_jobs_geometry_versions_version_id");
+                });
+
+            modelBuilder.Entity("BuildingDraft.Domain.Export.ProjectFile", b =>
+                {
+                    b.HasOne("BuildingDraft.Domain.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_files_projects_project_id");
                 });
 
             modelBuilder.Entity("BuildingDraft.Domain.Measurements.Measurement", b =>

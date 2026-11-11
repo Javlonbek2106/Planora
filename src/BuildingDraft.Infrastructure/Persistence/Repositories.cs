@@ -1,6 +1,7 @@
 using BuildingDraft.Domain;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
 using Microsoft.EntityFrameworkCore;
@@ -101,6 +102,25 @@ public sealed class EfMeasurementRepository(BuildingDraftDbContext db) : IMeasur
             .ToListAsync(ct);
 
     public void Add(Measurement measurement) => db.Measurements.Add(measurement);
+}
+
+public sealed class EfExportJobRepository(BuildingDraftDbContext db) : IExportJobRepository
+{
+    public Task<ExportJob?> FindAsync(Guid jobId, Guid ownerId, CancellationToken ct) =>
+        (from j in db.ExportJobs
+         join p in db.Projects on j.ProjectId equals p.Id
+         where j.Id == jobId && p.OwnerId == ownerId
+         select j).FirstOrDefaultAsync(ct);
+
+    public void Add(ExportJob job) => db.ExportJobs.Add(job);
+}
+
+public sealed class EfProjectFileRepository(BuildingDraftDbContext db) : IProjectFileRepository
+{
+    public Task<ProjectFile?> FindAsync(Guid fileId, CancellationToken ct) =>
+        db.ProjectFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fileId, ct);
+
+    public void Add(ProjectFile file) => db.ProjectFiles.Add(file);
 }
 
 public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork

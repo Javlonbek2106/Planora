@@ -18,7 +18,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration.GetConnectionString("Default")
-                       ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured."))
+                       ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured."),
+        Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Storage:Root"] ?? "storage"))
     .AddScoped<ICurrentUser, DevCurrentUser>()
     .AddExceptionHandler<DomainExceptionHandler>()
     .AddProblemDetails();
@@ -39,6 +40,7 @@ api.MapVariants();
 api.MapGeometry();
 api.MapMeasurements();
 api.MapSync();
+api.MapExports();
 
 app.Run();
 
