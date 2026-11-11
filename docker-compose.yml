@@ -15,5 +15,31 @@ services:
       timeout: 3s
       retries: 10
 
+  # docker compose up --build api   (needs AUTH_SIGNING_KEY or AUTH_AUTHORITY, see README)
+  api:
+    build: .
+    profiles: ["api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=building_draft;Username=postgres;Password=postgres
+      Database__MigrateOnStartup: "true"
+      Auth__Mode: Jwt
+      Auth__Audience: building-draft-api
+      Auth__Authority: ${AUTH_AUTHORITY:-}
+      # Required unless an authority is set; never commit a real key.
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:-}
+    volumes:
+      - api-storage:/data/storage
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200 ' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
 volumes:
   postgres-data:
+  api-storage:

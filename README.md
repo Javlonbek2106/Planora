@@ -54,6 +54,18 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/BuildingDraft.Api   
 dotnet test
 ```
 
+Docker bilan (API + PostgreSQL):
+
+```bash
+export AUTH_SIGNING_KEY="<kamida 32 bayt, maxfiy>"     # yoki AUTH_AUTHORITY=https://sizning-idp
+docker compose --profile api up --build
+curl http://localhost:8080/health/ready
+```
+
+Image non-root foydalanuvchi bilan ishlaydi; eksport fayllari `api-storage` volume'ida. `Database__MigrateOnStartup=true` faqat bitta nusxa (instance) ishlaganda qulay; bir nechta nusxada migratsiyani alohida qadam sifatida bajaring.
+
+CI (`.github/workflows/ci.yml`): build, barcha testlar, model o'zgargan-u migratsiya qo'shilmagan holatni tekshirish (`has-pending-model-changes`) va image'ni haqiqiy PostgreSQL bilan ishga tushirib `/health/ready` ni tekshiruvchi smoke test.
+
 Migratsiya yaratish: `dotnet tool restore && dotnet dotnet-ef migrations add <Nom> -p src/BuildingDraft.Infrastructure -s src/BuildingDraft.Api -o Persistence/Migrations`
 
 ## API (`/api/v1`)
