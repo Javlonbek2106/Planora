@@ -104,6 +104,14 @@ Command nomlari: `create_wall`, `move_wall`, `resize_wall`, `update_wall`, `spli
 
 Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflicts?: [{ constraintId, type, message }] }`.
 
+## Kuzatuvchanlik (observability)
+
+- **Health:** `GET /health/live` (jarayon tirik), `GET /health/ready` (+ ma'lumotlar bazasi). Token talab qilinmaydi.
+- **Log:** konsolga strukturali JSON (`Logging:Json`, Development'da o'chirilgan).
+- **Trace va metrika:** OpenTelemetry (ASP.NET Core, HttpClient, Npgsql, runtime). OTLP'ga eksport faqat `OTEL_EXPORTER_OTLP_ENDPOINT` berilsa yoqiladi.
+- **Biznes metrikalar:** `building_draft.geometry.commands` (`command_type`, `outcome`: `applied`/`rejected`/`conflict`) va `building_draft.exports` (`format`, `status`). Teg qiymatlari cheklangan to'plamdan olinadi, mijoz yuborgan nomlar hech qachon teg bo'lmaydi.
+- **OpenAPI:** Development'da `GET /openapi/v1.json`.
+
 ## Audit log
 
 Muhim amallar (loyiha, qavat, variant, o'lchov, scan, export, tiklash, konflikt yechimi) `audit_log` jadvaliga **o'zgarish bilan bir tranzaksiyada** yoziladi: rad etilgan o'zgarish uchun yozuv qolmaydi. Geometriya command'lari uchun `geometry_operations` audit izi hisoblanadi. O'qish: `GET /api/v1/projects/{id}/audit` (`page`, `pageSize`, yangisi birinchi).

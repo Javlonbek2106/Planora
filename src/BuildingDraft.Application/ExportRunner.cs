@@ -45,6 +45,7 @@ public sealed class ExportRunner(
         }
 
         await unitOfWork.SaveChangesAsync(ct);
+        Telemetry.Export(job.Format, job.Status);
     }
 
     async Task ExportAsync(ExportJob job, CancellationToken ct)

@@ -18,6 +18,8 @@ public static class GeometryCommandCatalog
 
     public static IReadOnlyCollection<string> Names => Commands.Keys.ToList();
 
+    public static bool IsKnown(string commandType) => Commands.ContainsKey(commandType);
+
     public static IGeometryCommand Parse(string commandType, JsonElement payload)
     {
         if (!Commands.TryGetValue(commandType, out var type))

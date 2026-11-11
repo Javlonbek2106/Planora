@@ -43,6 +43,21 @@ public sealed class GeometryService(
 
     public async Task<CommandResultDto> ExecuteAsync(Guid variantId, ExecuteCommandRequest request, CancellationToken ct)
     {
+        try
+        {
+            var result = await ExecuteCoreAsync(variantId, request, ct);
+            Telemetry.Command(request.CommandType, "applied");
+            return result;
+        }
+        catch (DomainException ex)
+        {
+            Telemetry.Command(request.CommandType, ex.Code == "VERSION_CONFLICT" ? "conflict" : "rejected");
+            throw;
+        }
+    }
+
+    async Task<CommandResultDto> ExecuteCoreAsync(Guid variantId, ExecuteCommandRequest request, CancellationToken ct)
+    {
         var (project, variant) = await OpenAsync(variantId, ct);
         if (await FindReplayAsync(variantId, request.ClientOperationId, ct) is { } replay)
             return replay;

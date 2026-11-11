@@ -94,6 +94,14 @@ public sealed class SyncService(
         foreach (var group in ops.Select((op, index) => (op, index)).GroupBy(x => x.op.VariantId))
             await ApplyToVariantAsync(group.Key, [..group], deviceId, rebase, results, applied, seenInBatch, ct);
 
+        for (var i = 0; i < ops.Count; i++)
+            Telemetry.Command(ops[i].CommandType, results[i].Status switch
+            {
+                SyncStatus.Acknowledged => "applied",
+                SyncStatus.Conflict => "conflict",
+                _ => "rejected"
+            });
+
         if (atomic && results.Any(r => r.Status != SyncStatus.Acknowledged))
             foreach (var index in applied)
                 results[index] = new(results[index].OperationId, SyncStatus.Failed, ErrorCode: RolledBack,

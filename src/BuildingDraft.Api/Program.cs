@@ -6,6 +6,12 @@ using BuildingDraft.Application;
 using BuildingDraft.Infrastructure;
 using BuildingDraft.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using OpenTelemetry;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +20,26 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
 });
+
+// Logs: structured JSON on the console unless switched off (local development). Traces, metrics and logs are
+// exported over OTLP only when an endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT).
+if (builder.Configuration.GetValue<bool>("Logging:Json"))
+    builder.Logging.AddJsonConsole();
+builder.Logging.AddOpenTelemetry(o =>
+{
+    o.IncludeFormattedMessage = true;
+    o.IncludeScopes = true;
+});
+
+var telemetry = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("building-draft-api"))
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddNpgsql())
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddRuntimeInstrumentation().AddMeter(Telemetry.MeterName));
+if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    telemetry.UseOtlpExporter();
+
+builder.Services.AddHealthChecks().AddDbContextCheck<BuildingDraftDbContext>("database", tags: ["ready"]);
+builder.Services.AddOpenApi();
 
 builder.Services
     .AddApplication()
@@ -34,6 +60,12 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 }
 
 app.UseExceptionHandler();
+
+// Liveness says the process is up; readiness also checks the database. Neither needs a token.
+app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
+if (app.Environment.IsDevelopment())
+    app.MapOpenApi();
 
 var api = app.MapGroup("/api/v1");
 if (!app.Configuration.IsDevMode())
