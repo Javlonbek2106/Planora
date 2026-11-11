@@ -468,6 +468,72 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
                     b.ToTable("projects", (string)null);
                 });
 
+            modelBuilder.Entity("BuildingDraft.Domain.Scans.ScanSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("AppliedVersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("applied_version_number");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision")
+                        .HasColumnName("confidence");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DeviceModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("device_model");
+
+                    b.Property<Guid>("FloorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("floor_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Proposal")
+                        .HasColumnType("text")
+                        .HasColumnName("proposal");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_scan_sessions");
+
+                    b.HasIndex("FloorId")
+                        .HasDatabaseName("ix_scan_sessions_floor_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_scan_sessions_project_id");
+
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_scan_sessions_variant_id");
+
+                    b.ToTable("scan_sessions", (string)null);
+                });
+
             modelBuilder.Entity("BuildingDraft.Infrastructure.Persistence.ConstraintRow", b =>
                 {
                     b.Property<Guid>("GeometryVersionId")
@@ -786,6 +852,30 @@ namespace BuildingDraft.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_geometry_versions_design_variants_variant_id");
+                });
+
+            modelBuilder.Entity("BuildingDraft.Domain.Scans.ScanSession", b =>
+                {
+                    b.HasOne("BuildingDraft.Domain.Projects.Floor", null)
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_scan_sessions_floors_floor_id");
+
+                    b.HasOne("BuildingDraft.Domain.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_scan_sessions_projects_project_id");
+
+                    b.HasOne("BuildingDraft.Domain.Projects.DesignVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_scan_sessions_design_variants_variant_id");
                 });
 
             modelBuilder.Entity("BuildingDraft.Infrastructure.Persistence.ConstraintRow", b =>

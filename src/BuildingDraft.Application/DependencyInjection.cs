@@ -22,6 +22,7 @@ public static class DependencyInjection
         .AddScoped<GeometryService>()
         .AddScoped<MeasurementService>()
         .AddScoped<SyncService>()
-        .AddScoped<ExportService>();
+        .AddScoped<ExportService>()
+        .AddScoped<ScanService>();
     }
 }

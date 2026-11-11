@@ -3,6 +3,8 @@ using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
+using BuildingDraft.Domain.Geometry.Commands;
+using BuildingDraft.Domain.Scans;
 
 namespace BuildingDraft.Application;
 
@@ -150,3 +152,34 @@ public sealed record ExportJobDto(
 }
 
 public sealed record ExportDownload(byte[] Content, string ContentType, string FileName);
+
+public sealed record CreateScanSessionRequest(Guid VariantId, Guid FloorId, MeasurementSource Source);
+
+public sealed record ProcessScanRequest(ScanCapture Capture);
+
+public sealed record ApplyScanRequest(Guid ClientOperationId, int ExpectedVersion, string? DeviceId = null);
+
+public sealed record ScanSessionDto(
+    Guid Id,
+    Guid VariantId,
+    Guid FloorId,
+    MeasurementSource Source,
+    ScanStatus Status,
+    string? DeviceModel,
+    double? Confidence,
+    int? AppliedVersionNumber,
+    DateTimeOffset CreatedAt)
+{
+    public static ScanSessionDto From(ScanSession s) =>
+        new(s.Id, s.VariantId, s.FloorId, s.Source, s.Status, s.DeviceModel, s.Confidence, s.AppliedVersionNumber, s.CreatedAt);
+}
+
+// A scan result is always an estimate; Preview says whether applying it to the current geometry would succeed.
+public sealed record ScanResultDto(
+    ScanSessionDto Session,
+    bool IsEstimate,
+    int WallCount,
+    int OpeningCount,
+    IReadOnlyList<ScanIssue> Issues,
+    ImportScan Proposal,
+    ValidationDto Preview);

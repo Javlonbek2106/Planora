@@ -22,6 +22,10 @@ public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logge
         ["INVALID_STATUS_TRANSITION"] = StatusCodes.Status409Conflict,
         ["INVALID_RESOLUTION"] = StatusCodes.Status400BadRequest,
         ["EXPORT_NOT_READY"] = StatusCodes.Status409Conflict,
+        ["SCAN_ALREADY_APPLIED"] = StatusCodes.Status409Conflict,
+        ["SCAN_NOT_PROCESSED"] = StatusCodes.Status409Conflict,
+        ["INVALID_SCAN"] = StatusCodes.Status400BadRequest,
+        ["INVALID_SCAN_SOURCE"] = StatusCodes.Status400BadRequest,
         ["INVALID_NAME"] = StatusCodes.Status400BadRequest
     };
 

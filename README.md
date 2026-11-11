@@ -113,7 +113,7 @@ Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflic
 
 ## Hali qilinmagan
 
-- Scan-session API (AR/LiDAR/AI natijasini ko'rib chiqish va qo'llash).
+- Serverda foto/video bo'yicha AI inference (scan-session faqat tayyor AR/LiDAR/AI geometriyani import qiladi).
 - Export: PNG/FBX/DWG/IFC; job hozir so'rov ichida bajariladi (kontrakt async-ga tayyor, background worker yo'q); PDF'da Latin-1 dan tashqari belgilar `?` bo'ladi; DXF R12 (qo'shimcha birlik o'zgaruvchisi yo'q, birlik sarlavha izohida).
 - Sync: oddiy metadata uchun last-write-wins (loyiha nomi va h.k. hozir faqat online).
 - Autentifikatsiya: hozir bitta sozlangan dev foydalanuvchi (`DevCurrentUser`), `users` jadvali yo'q.

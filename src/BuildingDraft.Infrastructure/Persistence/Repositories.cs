@@ -4,6 +4,7 @@ using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
+using BuildingDraft.Domain.Scans;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -121,6 +122,17 @@ public sealed class EfProjectFileRepository(BuildingDraftDbContext db) : IProjec
         db.ProjectFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fileId, ct);
 
     public void Add(ProjectFile file) => db.ProjectFiles.Add(file);
+}
+
+public sealed class EfScanSessionRepository(BuildingDraftDbContext db) : IScanSessionRepository
+{
+    public Task<ScanSession?> FindAsync(Guid sessionId, Guid ownerId, CancellationToken ct) =>
+        (from s in db.ScanSessions
+         join p in db.Projects on s.ProjectId equals p.Id
+         where s.Id == sessionId && p.OwnerId == ownerId
+         select s).FirstOrDefaultAsync(ct);
+
+    public void Add(ScanSession session) => db.ScanSessions.Add(session);
 }
 
 public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork

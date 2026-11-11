@@ -2,6 +2,7 @@ using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
+using BuildingDraft.Domain.Scans;
 
 namespace BuildingDraft.Domain.Abstractions;
 
@@ -60,4 +61,10 @@ public interface IFileStorage
 {
     Task SaveAsync(string key, byte[] content, CancellationToken ct);
     Task<byte[]?> ReadAsync(string key, CancellationToken ct);
+}
+
+public interface IScanSessionRepository
+{
+    Task<ScanSession?> FindAsync(Guid sessionId, Guid ownerId, CancellationToken ct);
+    void Add(ScanSession session);
 }

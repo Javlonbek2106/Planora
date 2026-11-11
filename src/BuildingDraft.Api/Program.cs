@@ -41,6 +41,7 @@ api.MapGeometry();
 api.MapMeasurements();
 api.MapSync();
 api.MapExports();
+api.MapScans();
 
 app.Run();
 

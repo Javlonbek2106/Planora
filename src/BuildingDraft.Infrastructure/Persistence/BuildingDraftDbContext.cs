@@ -1,6 +1,7 @@
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
+using BuildingDraft.Domain.Scans;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,6 +15,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
     public DbSet<Measurement> Measurements => Set<Measurement>();
     public DbSet<ExportJob> ExportJobs => Set<ExportJob>();
     public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
+    public DbSet<ScanSession> ScanSessions => Set<ScanSession>();
     public DbSet<NodeRow> Nodes => Set<NodeRow>();
     public DbSet<WallRow> Walls => Set<WallRow>();
     public DbSet<RoomRow> Rooms => Set<RoomRow>();
@@ -28,6 +30,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
         modelBuilder.ConfigureGeometrySnapshot();
         modelBuilder.ConfigureMeasurements();
         modelBuilder.ConfigureExports();
+        modelBuilder.ConfigureScans();
     }
 }
 
@@ -205,6 +208,23 @@ static class ModelConfiguration
             e.HasOne<Project>().WithMany().HasForeignKey(j => j.ProjectId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<GeometryVersion>().WithMany().HasForeignKey(j => j.VersionId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ProjectFile>().WithMany().HasForeignKey(j => j.ResultFileId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    public static void ConfigureScans(this ModelBuilder model)
+    {
+        model.Entity<ScanSession>(e =>
+        {
+            e.ToTable("scan_sessions");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedNever();
+            e.Property(s => s.Source).HasConversion<string>().HasMaxLength(20);
+            e.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(s => s.DeviceModel).HasMaxLength(200);
+            e.HasIndex(s => s.ProjectId);
+            e.HasOne<Project>().WithMany().HasForeignKey(s => s.ProjectId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<DesignVariant>().WithMany().HasForeignKey(s => s.VariantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Floor>().WithMany().HasForeignKey(s => s.FloorId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

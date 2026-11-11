@@ -3,6 +3,7 @@ using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
+using BuildingDraft.Domain.Scans;
 
 namespace BuildingDraft.Application;
 
@@ -28,6 +29,9 @@ static class RepositoryExtensions
 
     public static async Task<ExportJob> GetAsync(this IExportJobRepository repository, Guid jobId, Guid ownerId, CancellationToken ct) =>
         await repository.FindAsync(jobId, ownerId, ct) ?? throw NotFound("Export");
+
+    public static async Task<ScanSession> GetAsync(this IScanSessionRepository repository, Guid sessionId, Guid ownerId, CancellationToken ct) =>
+        await repository.FindAsync(sessionId, ownerId, ct) ?? throw NotFound("Scan session");
 
     static DomainException NotFound(string what) => new("NOT_FOUND", $"{what} not found.");
 }
