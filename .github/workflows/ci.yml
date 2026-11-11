@@ -68,9 +68,12 @@ jobs:
       - name: "Start the API (Development mode, one fixed user, migrates on start)"
         run: |
           dotnet publish src/BuildingDraft.Api -c Release -o api
+          # Run from the publish folder: ASP.NET looks for appsettings*.json in the current directory.
+          cd api
           ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5276 \
             ConnectionStrings__Default="Host=localhost;Port=5432;Database=building_draft;Username=postgres;Password=postgres" \
-            nohup dotnet api/BuildingDraft.Api.dll > api.log 2>&1 &
+            nohup dotnet BuildingDraft.Api.dll > ../api.log 2>&1 &
+          cd ..
           for i in $(seq 1 40); do curl -fs http://localhost:5276/health/ready && break; sleep 2; done
           curl -fs http://localhost:5276/health/ready
       - name: Run the live sync tests
