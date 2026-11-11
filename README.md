@@ -3,6 +3,21 @@
 Kvartirani o'lchash, 2D chizma yaratish va rough 3D modelga tayyor geometriya yaratish platformasi.
 Talablar: `Building_Draft_Full_PRD_TZ_v1.0.docx`. Bu repo hozircha **backend va Geometry Core** ni o'z ichiga oladi (Flutter ilova keyingi bosqich).
 
+## Mobil ilova (`mobile/`, Flutter)
+
+Hozircha **2D Constructor PoC** (PRD 15.4): devor chizish, tanlash, burchakni siljitish, o'chirish, undo/redo, pan/zoom, snapping (burchak, devor/T-ulanish, o'q, setka), telefon va planshet layout'i.
+
+```bash
+cd mobile
+flutter test                 # geometriya, kontroller, vidjetlar, ishlash o'lchovlari, backend shartnomasi
+flutter run -d chrome        # ?demo=apartment yoki ?demo=lattice bilan demo reja ochiladi
+```
+
+- **Qatlamlar:** `lib/geometry` (Flutter'ga bog'liq emas: model, command'lar, validatsiya, snap, hit-test), `lib/state` (kontroller, viewport), `lib/ui`.
+- **Offline validatsiya:** server qoidalarining devorlar qismi Dart'da takrorlangan; o'zgargan devorlar bo'yicha incremental tekshiruv (511 devorda 19 ms o'rniga ~1.3 ms).
+- **Shartnoma:** ilovaning chizish seansi `contracts/client_session.json` ga yoziladi (Dart testi), C# testi (`ClientContractTests`) uni serverning haqiqiy geometriya pipeline'ida qayta o'ynaydi. Nom yoki maydon o'zgarsa, ikki tomondan biri yiqiladi. Yangilash: `flutter test --dart-define=UPDATE_GOLDEN=true`.
+- **Hali yo'q:** xona/eshik/deraza, o'lchash ekranlari, lokal SQLite va sync, 3D, autentifikatsiya, qurilmada FPS o'lchovi.
+
 ## Arxitektura
 
 Modular monolith, qatlamlar bog'liqligi faqat ichkariga qarab yo'nalgan:

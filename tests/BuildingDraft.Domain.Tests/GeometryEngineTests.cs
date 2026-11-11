@@ -254,4 +254,29 @@ public class GeometryEngineTests
         Assert.Equal("INVALID_COMMAND_PAYLOAD",
             Assert.Throws<DomainException>(() => GeometryCommandCatalog.Parse("resize_wall", JsonSerializer.Deserialize<JsonElement>("{}"))).Code);
     }
+
+    [Fact]
+    public void Move_node_drags_a_corner_and_every_wall_on_it_follows()
+    {
+        var f = new RoomFixture();
+
+        var outcome = f.Run(new MoveNode(f.Nodes[2], 4500, 3500));
+
+        Assert.True(outcome.Success, outcome.Failure?.Message);
+        Assert.Equal(4500, f.Model.Nodes[f.Nodes[2]].X);
+        Assert.Equal(3500, f.Model.Nodes[f.Nodes[2]].Y);
+        Assert.Equal(Math.Sqrt(500 * 500 + 3500 * 3500), f.Model.Length(f.Model.Walls[f.Walls[1]]), 2);
+    }
+
+    [Fact]
+    public void Move_node_rejects_unknown_nodes_and_moves_that_make_walls_cross()
+    {
+        var f = new RoomFixture();
+
+        Assert.Equal("NODE_NOT_FOUND", f.Run(new MoveNode(Guid.NewGuid(), 0, 0)).Failure!.Code);
+
+        // Dragging a corner across the opposite wall folds the room over itself.
+        var folded = f.Run(new MoveNode(f.Nodes[2], 4000, -1000));
+        Assert.Contains(folded.Failure!.Errors!, e => e.Code == "WALL_INTERSECTION");
+    }
 }
