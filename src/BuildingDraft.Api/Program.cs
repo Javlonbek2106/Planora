@@ -47,6 +47,7 @@ builder.Services
                        ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured."),
         Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Storage:Root"] ?? "storage"))
     .AddApiAuthentication(builder.Configuration, builder.Environment)
+    .AddSingleton(new ExportWorkerOptions())
     .AddHostedService<ExportWorker>()
     .AddExceptionHandler<DomainExceptionHandler>()
     .AddProblemDetails();

@@ -7,6 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace BuildingDraft.Application;
 
+public interface IExportJobRunner
+{
+    Task<IReadOnlyList<Guid>> UnfinishedJobIdsAsync(CancellationToken ct);
+    Task RunAsync(Guid jobId, CancellationToken ct);
+}
+
 // Executes one export job outside any request, so it has no current user: the job already carries its project.
 public sealed class ExportRunner(
     IExportJobRepository jobs,
@@ -17,7 +23,7 @@ public sealed class ExportRunner(
     IEnumerable<IGeometryExporter> exporters,
     IUnitOfWork unitOfWork,
     TimeProvider clock,
-    ILogger<ExportRunner> logger)
+    ILogger<ExportRunner> logger) : IExportJobRunner
 {
     public Task<IReadOnlyList<Guid>> UnfinishedJobIdsAsync(CancellationToken ct) => jobs.ListUnfinishedIdsAsync(ct);
 

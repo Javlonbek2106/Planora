@@ -47,7 +47,11 @@ public class ApiFactory : WebApplicationFactory<Program>
     {
         var host = base.CreateHost(builder);
         using var scope = host.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<BuildingDraftDbContext>().Database.EnsureCreated();
+        var db = scope.ServiceProvider.GetRequiredService<BuildingDraftDbContext>();
+        db.Database.EnsureCreated();
+        // WAL lets readers and the background worker's writes overlap; the default journal makes SQLite answer
+        // "database is locked" immediately when they collide.
+        db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
         return host;
     }
 
