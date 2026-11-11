@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry.Commands;
 using BuildingDraft.Domain.Geometry.Pipeline;
@@ -14,6 +15,7 @@ public sealed class SyncService(
     GeometryVersionWriter writer,
     GeometryProcessor processor,
     IUnitOfWork unitOfWork,
+    AuditLog audit,
     ICurrentUser user)
 {
     const string Blocked = "BLOCKED_BY_PREVIOUS_OPERATION";
@@ -64,8 +66,12 @@ public sealed class SyncService(
         var project = await projects.GetByVariantAsync(request.VariantId, user.UserId, ct);
         var variant = project.GetVariant(request.VariantId);
 
+        audit.Record(project.Id, AuditActions.SyncConflictResolved, "variant", variant.Id, new { request.Resolution });
         if (request.Resolution == ConflictResolution.KeepServer)
+        {
+            await unitOfWork.SaveChangesAsync(ct);
             return new(request.Resolution, variant.CurrentVersionNumber, []);
+        }
 
         var operationsToApply = request.Operations ?? [];
         if (operationsToApply.Count == 0 || operationsToApply.Any(o => o.VariantId != request.VariantId))

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Geometry.Commands;
@@ -15,6 +16,7 @@ public sealed class GeometryService(
     GeometryVersionWriter writer,
     IUnitOfWork unitOfWork,
     GeometryProcessor processor,
+    AuditLog audit,
     ICurrentUser user)
 {
     public async Task<GeometryDto> GetAsync(Guid variantId, int? versionNumber, CancellationToken ct)
@@ -74,6 +76,7 @@ public sealed class GeometryService(
 
         var (parent, _) = await LoadCurrentAsync(variant, ct);
         var model = await versions.LoadModelAsync(target.Id, ct);
+        audit.Record(project.Id, AuditActions.GeometryRestored, "variant", variantId, new { versionId, target.VersionNumber });
         return await CommitAsync(project, variant, parent, model, request.ClientOperationId, request.ExpectedVersion,
             GeometryOperation.RestoreCommand, JsonSerializer.Serialize(new { versionId }), null, [], ct);
     }

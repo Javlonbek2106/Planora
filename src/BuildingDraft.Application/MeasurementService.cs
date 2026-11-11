@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry.Commands;
 using BuildingDraft.Domain.Measurements;
@@ -12,6 +13,7 @@ public sealed class MeasurementService(
     IGeometryVersionRepository versions,
     GeometryService geometry,
     IUnitOfWork unitOfWork,
+    AuditLog audit,
     ICurrentUser user,
     TimeProvider clock)
 {
@@ -35,6 +37,7 @@ public sealed class MeasurementService(
             project.Id, variant.Id, request.TargetObjectId, request.ValueMm, request.Reference, request.Source,
             request.Confidence, request.DeviceName, request.Notes, request.CapturedAt ?? clock.GetUtcNow());
         measurements.Add(measurement);
+        audit.Record(project.Id, AuditActions.MeasurementRecorded, "measurement", measurement.Id, new { measurement.Source, measurement.ValueMm });
         await unitOfWork.SaveChangesAsync(ct);
         return MeasurementDto.From(measurement);
     }
@@ -43,6 +46,7 @@ public sealed class MeasurementService(
     {
         var measurement = await measurements.GetAsync(measurementId, user.UserId, ct);
         measurement.ChangeStatus(request.Status);
+        audit.Record(measurement.ProjectId, AuditActions.MeasurementStatusChanged, "measurement", measurement.Id, new { request.Status });
         await unitOfWork.SaveChangesAsync(ct);
         return MeasurementDto.From(measurement);
     }
@@ -58,6 +62,7 @@ public sealed class MeasurementService(
         foreach (var old in earlier.Where(m => m.Id != measurement.Id && m.IsApplied && m.Status != MeasurementStatus.Rejected))
             old.Supersede();
         measurement.MarkApplied(request.ExpectedVersion + 1);
+        audit.Record(measurement.ProjectId, AuditActions.MeasurementApplied, "measurement", measurement.Id, new { measurement.ValueMm });
 
         var command = new ApplyMeasurement(measurement.TargetObjectId, measurement.ValueMm, measurement.Reference);
         var payload = JsonSerializer.SerializeToElement(command, GeometryCommandCatalog.Json);

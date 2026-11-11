@@ -1,3 +1,4 @@
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Measurements;
@@ -84,4 +85,10 @@ public interface IExportQueue
 {
     ValueTask EnqueueAsync(Guid jobId, CancellationToken ct);
     IAsyncEnumerable<Guid> ReadAllAsync(CancellationToken ct);
+}
+
+public interface IAuditEntryRepository
+{
+    Task<(IReadOnlyList<AuditEntry> Items, int Total)> ListAsync(Guid projectId, int page, int pageSize, CancellationToken ct);
+    void Add(AuditEntry entry);
 }

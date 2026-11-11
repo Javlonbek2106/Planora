@@ -1,6 +1,7 @@
 using BuildingDraft.Domain;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
@@ -156,6 +157,19 @@ public sealed class EfUserRepository(BuildingDraftDbContext db) : IUserRepositor
         db.Users.FirstOrDefaultAsync(u => u.ExternalSubject == externalSubject, ct);
 
     public void Add(User user) => db.Users.Add(user);
+}
+
+public sealed class EfAuditEntryRepository(BuildingDraftDbContext db) : IAuditEntryRepository
+{
+    public async Task<(IReadOnlyList<AuditEntry> Items, int Total)> ListAsync(Guid projectId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.AuditEntries.AsNoTracking().Where(a => a.ProjectId == projectId);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(a => a.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return (items, total);
+    }
+
+    public void Add(AuditEntry entry) => db.AuditEntries.Add(entry);
 }
 
 public sealed class EfUnitOfWork(BuildingDraftDbContext db) : IUnitOfWork

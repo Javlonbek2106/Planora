@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Geometry;
 using BuildingDraft.Domain.Geometry.Commands;
@@ -17,6 +18,7 @@ public sealed class ScanService(
     GeometryService geometry,
     GeometryProcessor processor,
     IUnitOfWork unitOfWork,
+    AuditLog audit,
     ICurrentUser user,
     TimeProvider clock)
 {
@@ -28,6 +30,7 @@ public sealed class ScanService(
 
         var session = ScanSession.Create(project.Id, request.VariantId, request.FloorId, request.Source, clock.GetUtcNow());
         scans.Add(session);
+        audit.Record(project.Id, AuditActions.ScanCreated, "scan_session", session.Id, new { session.Source });
         await unitOfWork.SaveChangesAsync(ct);
         return ScanSessionDto.From(session);
     }
@@ -84,6 +87,7 @@ public sealed class ScanService(
         }
 
         session.MarkApplied(request.ExpectedVersion + 1);
+        audit.Record(session.ProjectId, AuditActions.ScanApplied, "scan_session", session.Id, new { walls = proposal.Command.Walls.Count });
         var payload = JsonSerializer.SerializeToElement(proposal.Command, GeometryCommandCatalog.Json);
         return await geometry.ExecuteAsync(session.VariantId,
             new(request.ClientOperationId, request.ExpectedVersion, "import_scan", payload, request.DeviceId), ct);

@@ -1,3 +1,4 @@
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Measurements;
 using BuildingDraft.Domain.Projects;
@@ -16,6 +17,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
     public DbSet<Measurement> Measurements => Set<Measurement>();
     public DbSet<ExportJob> ExportJobs => Set<ExportJob>();
     public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<User> Users => Set<User>();
     public DbSet<ScanSession> ScanSessions => Set<ScanSession>();
     public DbSet<NodeRow> Nodes => Set<NodeRow>();
@@ -34,6 +36,7 @@ public sealed class BuildingDraftDbContext(DbContextOptions<BuildingDraftDbConte
         modelBuilder.ConfigureExports();
         modelBuilder.ConfigureScans();
         modelBuilder.ConfigureUsers();
+        modelBuilder.ConfigureAudit();
     }
 }
 
@@ -242,6 +245,20 @@ static class ModelConfiguration
             e.Property(u => u.Email).HasMaxLength(320);
             e.Property(u => u.DisplayName).HasMaxLength(200);
             e.HasIndex(u => u.ExternalSubject).IsUnique();
+        });
+    }
+
+    public static void ConfigureAudit(this ModelBuilder model)
+    {
+        model.Entity<AuditEntry>(e =>
+        {
+            e.ToTable("audit_log");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).ValueGeneratedNever();
+            e.Property(a => a.Action).HasMaxLength(60);
+            e.Property(a => a.EntityType).HasMaxLength(40);
+            e.HasIndex(a => a.ProjectId);
+            e.HasOne<Project>().WithMany().HasForeignKey(a => a.ProjectId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BuildingDraft.Domain;
+using BuildingDraft.Domain.Audit;
 using BuildingDraft.Domain.Abstractions;
 using BuildingDraft.Domain.Export;
 using BuildingDraft.Domain.Projects;
@@ -15,6 +16,7 @@ public sealed class ExportService(
     IEnumerable<IGeometryExporter> exporters,
     IExportQueue queue,
     IUnitOfWork unitOfWork,
+    AuditLog audit,
     ICurrentUser user,
     TimeProvider clock)
 {
@@ -31,6 +33,7 @@ public sealed class ExportService(
         var job = ExportJob.Create(project.Id, version.Id, request.Format,
             JsonSerializer.Serialize(new ExportOptions(request.FloorId), GeometryJson.Options), clock.GetUtcNow());
         jobs.Add(job);
+        audit.Record(project.Id, AuditActions.ExportRequested, "export", job.Id, new { request.Format, version.VersionNumber });
         await unitOfWork.SaveChangesAsync(ct);
 
         await queue.EnqueueAsync(job.Id, ct);

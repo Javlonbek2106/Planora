@@ -104,6 +104,10 @@ Command nomlari: `create_wall`, `move_wall`, `resize_wall`, `update_wall`, `spli
 
 Xato kontrakti: `{ success: false, errorCode, message, traceId, errors?, conflicts?: [{ constraintId, type, message }] }`.
 
+## Audit log
+
+Muhim amallar (loyiha, qavat, variant, o'lchov, scan, export, tiklash, konflikt yechimi) `audit_log` jadvaliga **o'zgarish bilan bir tranzaksiyada** yoziladi: rad etilgan o'zgarish uchun yozuv qolmaydi. Geometriya command'lari uchun `geometry_operations` audit izi hisoblanadi. O'qish: `GET /api/v1/projects/{id}/audit` (`page`, `pageSize`, yangisi birinchi).
+
 ## Autentifikatsiya
 
 Server login/parol saqlamaydi: tashqi identity provider (Keycloak, Auth0, Entra ID va h.k.) chiqargan **JWT Bearer** tokenini tekshiradi. Foydalanuvchi `sub` claim'i bo'yicha `users` jadvalida birinchi so'rovda avtomatik yaratiladi; nofaol foydalanuvchi `403 USER_INACTIVE`.

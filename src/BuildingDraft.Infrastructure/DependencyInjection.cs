@@ -19,6 +19,7 @@ public static class DependencyInjection
         .AddScoped<IGeometryVersionRepository, EfGeometryVersionRepository>()
         .AddScoped<IGeometryOperationRepository, EfGeometryOperationRepository>()
         .AddScoped<IMeasurementRepository, EfMeasurementRepository>()
+        .AddScoped<IAuditEntryRepository, EfAuditEntryRepository>()
         .AddScoped<IUserRepository, EfUserRepository>()
         .AddScoped<IScanSessionRepository, EfScanSessionRepository>()
         .AddScoped<IExportJobRepository, EfExportJobRepository>()

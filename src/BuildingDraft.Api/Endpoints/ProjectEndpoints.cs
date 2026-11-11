@@ -36,6 +36,9 @@ public static class ProjectEndpoints
             return Results.Created($"/api/v1/floors/{floor.Id}", floor);
         });
 
+        projects.MapGet("/{id:guid}/audit", (Guid id, int? page, int? pageSize, AuditService s, CancellationToken ct) =>
+            s.ListAsync(id, page ?? 1, pageSize ?? 50, ct));
+
         api.MapPut("/floors/{id:guid}", (Guid id, FloorRequest r, ProjectService s, CancellationToken ct) =>
             s.UpdateFloorAsync(id, r, ct));
     }

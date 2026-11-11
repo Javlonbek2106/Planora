@@ -25,6 +25,8 @@ public static class DependencyInjection
         .AddScoped<ExportService>()
         .AddScoped<ExportRunner>()
         .AddScoped<ScanService>()
-        .AddScoped<UserService>();
+        .AddScoped<UserService>()
+        .AddScoped<AuditLog>()
+        .AddScoped<AuditService>();
     }
 }
