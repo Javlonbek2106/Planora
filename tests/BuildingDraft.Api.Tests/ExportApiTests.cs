@@ -58,6 +58,7 @@ public class ExportApiTests : IClassFixture<ApiFactory>
     [InlineData("dxf", "application/dxf", ".dxf", "ENTITIES")]
     [InlineData("pdf", "application/pdf", ".pdf", "%PDF-1.4")]
     [InlineData("obj", "model/obj", ".obj", "g walls")]
+    [InlineData("png", "image/png", ".png", "PNG")]
     public async Task Exports_complete_and_download_with_the_right_content_type(string format, string contentType, string extension, string marker)
     {
         var (_, variantId, floorId) = await api.CreateProjectWithFloor("Flat 12");
@@ -82,7 +83,6 @@ public class ExportApiTests : IClassFixture<ApiFactory>
     }
 
     [Theory]
-    [InlineData("png")]
     [InlineData("fbx")]
     [InlineData("dwg")]
     [InlineData("ifc")]
@@ -195,9 +195,9 @@ public class ExplodingExporterFactory : ApiFactory
 {
     sealed class ExplodingExporter : IGeometryExporter
     {
-        public ExportFormat Format => ExportFormat.Png;
-        public string ContentType => "image/png";
-        public string Extension => "png";
+        public ExportFormat Format => ExportFormat.Fbx;
+        public string ContentType => "application/octet-stream";
+        public string Extension => "fbx";
         public byte[] Export(ExportContext context) => throw new InvalidOperationException("boom");
     }
 
@@ -226,7 +226,7 @@ public class ExportWorkerResilienceTests : IClassFixture<ExplodingExporterFactor
         var versions = await ApiClient.Body(await api.Get($"/api/v1/variants/{variantId}/geometry/versions"));
         var version = versions[versions.GetArrayLength() - 1].GetProperty("id").GetGuid();
 
-        var crashed = await ApiClient.Body(await api.Post($"/api/v1/geometry-versions/{version}/exports", new { format = "png" }));
+        var crashed = await ApiClient.Body(await api.Post($"/api/v1/geometry-versions/{version}/exports", new { format = "fbx" }));
         var crashedJob = await Wait(crashed.GetProperty("id").GetGuid());
         var fine = await ApiClient.Body(await api.Post($"/api/v1/geometry-versions/{version}/exports", new { format = "svg" }));
         var fineJob = await Wait(fine.GetProperty("id").GetGuid());

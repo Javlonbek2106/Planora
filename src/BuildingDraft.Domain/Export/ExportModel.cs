@@ -65,24 +65,49 @@ public sealed class PlanDrawing
         if (floorWallList.Count == 0)
             throw new DomainException("EXPORT_EMPTY", "There is nothing to export on this floor.");
 
-        var center = floorWallList.Aggregate(new Vec2(0, 0), (sum, w) => sum + (model.Pos(w.StartNodeId) + model.Pos(w.EndNodeId)) / 2) / floorWallList.Count;
-        var walls = floorWallList.Select(w => ToPlanWall(model, w, center)).ToList();
+        var rooms = new List<PlanRoom>();
+        foreach (var room in model.Rooms.Values.Where(r => r.FloorId == floorId).OrderBy(r => r.Id))
+            if (RoomGeometry.InnerPolygon(model, room) is { } outline)
+                rooms.Add(new(room.Name, room.AreaType, outline, Math.Abs(RoomGeometry.SignedArea(outline)) / 1e6, Centroid(outline)));
 
+        var centers = ComponentCenters(model, floorWallList);
+        var walls = floorWallList.Select(w => ToPlanWall(model, w, centers[w.Id], rooms)).ToList();
         var floorWalls = walls.ToDictionary(w => w.Id);
         var openings = model.Openings.Values.OrderBy(o => o.Id)
             .Where(o => floorWalls.ContainsKey(o.WallId))
             .Select(o => new PlanOpening(o.Kind, Rectangle(floorWalls[o.WallId].Start, floorWalls[o.WallId].End, o.OffsetMm, o.WidthMm, floorWalls[o.WallId].ThicknessMm)))
             .ToList();
 
-        var rooms = new List<PlanRoom>();
-        foreach (var room in model.Rooms.Values.Where(r => r.FloorId == floorId).OrderBy(r => r.Id))
-            if (RoomGeometry.InnerPolygon(model, room) is { } outline)
-                rooms.Add(new(room.Name, room.AreaType, outline, Math.Abs(RoomGeometry.SignedArea(outline)) / 1e6, Centroid(outline)));
-
         return new(walls, openings, rooms);
     }
 
-    static PlanWall ToPlanWall(GeometryModel model, Wall wall, Vec2 planCenter)
+    // Labels go "outside" relative to the group of connected walls a wall belongs to, so separate rooms are each labelled
+    // from their own centre instead of from the centre of the whole drawing.
+    static Dictionary<Guid, Vec2> ComponentCenters(GeometryModel model, List<Wall> walls)
+    {
+        var byId = walls.ToDictionary(w => w.Id);
+        var centers = new Dictionary<Guid, Vec2>();
+        foreach (var start in walls.Where(w => !centers.ContainsKey(w.Id)))
+        {
+            var group = new List<Wall>();
+            var queue = new Queue<Wall>([start]);
+            var seen = new HashSet<Guid> { start.Id };
+            while (queue.Count > 0)
+            {
+                var wall = queue.Dequeue();
+                group.Add(wall);
+                foreach (var next in model.WallsAt(wall.StartNodeId).Concat(model.WallsAt(wall.EndNodeId)).Where(n => byId.ContainsKey(n.Id) && seen.Add(n.Id)))
+                    queue.Enqueue(next);
+            }
+
+            var center = group.Aggregate(new Vec2(0, 0), (sum, w) => sum + (model.Pos(w.StartNodeId) + model.Pos(w.EndNodeId)) / 2) / group.Count;
+            foreach (var w in group)
+                centers[w.Id] = center;
+        }
+        return centers;
+    }
+
+    static PlanWall ToPlanWall(GeometryModel model, Wall wall, Vec2 planCenter, IReadOnlyList<PlanRoom> rooms)
     {
         var (start, end) = (model.Pos(wall.StartNodeId), model.Pos(wall.EndNodeId));
         var dir = (end - start) / (end - start).Length;
@@ -95,9 +120,14 @@ public sealed class PlanDrawing
 
         var mid = (start + end) / 2;
         var normal = new Vec2(-dir.Y, dir.X);
-        if (Vec2.Dot(normal, mid - planCenter) < 0)
+        var reach = half + 180;
+
+        // Put the label on the side that is not inside a room. If that does not decide it (a wall inside the plan,
+        // or between two rooms), fall back to the side facing away from the centre of the connected walls.
+        var inside = (Left: rooms.Any(r => Contains(r.Outline, mid + normal * reach)), Right: rooms.Any(r => Contains(r.Outline, mid - normal * reach)));
+        if (inside.Left == inside.Right ? Vec2.Dot(normal, mid - planCenter) < 0 : inside.Left)
             normal = normal * -1;
-        return new(wall.Id, start, end, wall.ThicknessMm, outline, mid + normal * (half + 180));
+        return new(wall.Id, start, end, wall.ThicknessMm, outline, mid + normal * reach);
     }
 
     // A strip along a wall: the whole wall, or the part from offset to offset + width.
@@ -109,6 +139,16 @@ public sealed class PlanDrawing
         var from = start + dir * offset;
         var to = start + dir * (offset + (width ?? length));
         return [from + normal, to + normal, to - normal, from - normal];
+    }
+
+    static bool Contains(IReadOnlyList<Vec2> polygon, Vec2 point)
+    {
+        var inside = false;
+        for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            if ((polygon[i].Y > point.Y) != (polygon[j].Y > point.Y)
+                && point.X < (polygon[j].X - polygon[i].X) * (point.Y - polygon[i].Y) / (polygon[j].Y - polygon[i].Y) + polygon[i].X)
+                inside = !inside;
+        return inside;
     }
 
     static Vec2 Centroid(IReadOnlyList<Vec2> p)

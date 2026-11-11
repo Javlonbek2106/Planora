@@ -173,6 +173,28 @@ public class ExportTests
     }
 
     [Fact]
+    public void Wall_labels_stay_outside_the_rooms_even_for_a_non_convex_room()
+    {
+        double[][] corners = [[0, 0], [4000, 0], [4000, 2000], [2000, 2000], [2000, 4000], [0, 4000]];
+        var l = new RoomFixtureL(GroundFloor.Id, corners, corners.Select(_ => Guid.NewGuid()).ToArray(), corners.Select(_ => Guid.NewGuid()).ToArray());
+
+        var plan = PlanDrawing.Build(l.Fixture.Model, GroundFloor.Id);
+
+        static bool Inside(IReadOnlyList<Vec2> polygon, Vec2 p)
+        {
+            var inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+                if ((polygon[i].Y > p.Y) != (polygon[j].Y > p.Y)
+                    && p.X < (polygon[j].X - polygon[i].X) * (p.Y - polygon[i].Y) / (polygon[j].Y - polygon[i].Y) + polygon[i].X)
+                    inside = !inside;
+            return inside;
+        }
+
+        Assert.Equal(6, plan.Walls.Count);
+        Assert.All(plan.Walls, w => Assert.DoesNotContain(plan.Rooms, r => Inside(r.Outline, w.Label)));
+    }
+
+    [Fact]
     public void Plan_formats_need_a_floor_when_geometry_spans_several()
     {
         var f = Room();
@@ -191,7 +213,7 @@ public class ExportTests
     {
         var context = new ExportContext(new GeometryModel(), Project.Floors, GroundFloor.Id, "Flat 12", 1);
 
-        foreach (IGeometryExporter exporter in new IGeometryExporter[] { new SvgExporter(), new DxfExporter(), new PdfExporter(), new ObjExporter() })
+        foreach (IGeometryExporter exporter in new IGeometryExporter[] { new SvgExporter(), new DxfExporter(), new PdfExporter(), new ObjExporter(), new PngExporter() })
             Assert.Equal("EXPORT_EMPTY", Assert.Throws<DomainException>(() => exporter.Export(context)).Code);
     }
 }

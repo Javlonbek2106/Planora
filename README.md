@@ -110,7 +110,7 @@ Export:
 
 Export asinxron: job bazada saqlanadi, `BackgroundService` bajaradi, server qayta ishga tushsa tugallanmagan joblar qayta navbatga olinadi. Kutilmagan xato faqat shu job'ni `failed` (`EXPORT_FAILED`) qiladi.
 
-Formatlar: **SVG, DXF (R12), PDF, OBJ**. PNG, FBX, DWG, IFC hozircha `EXPORT_FORMAT_NOT_SUPPORTED` qaytaradi. Reja formatlari bitta qavatni chizadi (`floorId`, bitta qavat bo'lsa ixtiyoriy). OBJ metrda, Y yuqoriga; devorlar eshik/deraza atrofida bo'linadi. Fayllar ezdxf, pypdf va trimesh bilan mustaqil tekshirilgan.
+Formatlar: **SVG, DXF (R12), PDF, PNG, OBJ**. FBX, DWG, IFC hozircha `EXPORT_FORMAT_NOT_SUPPORTED` qaytaradi. PNG tashqi kutubxonasiz chiziladi (1600 px kenglik, silliq chekka); unda maydon va devor o'lchamlari bor, xona nomlari yo'q (shrift talab qiladi, nomlar kerak bo'lsa SVG yoki PDF). Reja formatlari bitta qavatni chizadi (`floorId`, bitta qavat bo'lsa ixtiyoriy). OBJ metrda, Y yuqoriga; devorlar eshik/deraza atrofida bo'linadi. Fayllar ezdxf, pypdf va trimesh bilan mustaqil tekshirilgan.
 
 Command nomlari: `create_wall`, `move_wall`, `resize_wall`, `update_wall`, `split_wall`, `merge_walls`, `delete_wall`, `create_room`, `delete_room`, `merge_rooms`, `attach_opening`, `remove_opening`, `add_constraint`, `remove_constraint`, `apply_measurement`.
 
@@ -153,7 +153,7 @@ Maxfiy kalitni source code yoki mobil ilovaga yozmang: muhit o'zgaruvchisi (`Aut
 ## Hali qilinmagan
 
 - Serverda foto/video bo'yicha AI inference (scan-session faqat tayyor AR/LiDAR/AI geometriyani import qiladi).
-- Export: PNG/FBX/DWG/IFC; PDF'da Latin-1 dan tashqari belgilar `?` bo'ladi; DXF R12 (qo'shimcha birlik o'zgaruvchisi yo'q, birlik sarlavha izohida).
+- Export: FBX/DWG/IFC; PDF'da Latin-1 dan tashqari belgilar `?` bo'ladi; DXF R12 (qo'shimcha birlik o'zgaruvchisi yo'q, birlik sarlavha izohida).
 - Sync: oddiy metadata uchun last-write-wins (loyiha nomi va h.k. hozir faqat online).
 - Token chiqarish (login/parol/ro'yxatdan o'tish): server faqat tashqi identity provider tokenini tekshiradi.
 - Constraint `priority`, node `z` koordinatasi, `GeometryOperation` dan versiyani qayta qurish.
