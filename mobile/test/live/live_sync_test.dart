@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:building_draft_app/geometry/commands.dart';
 import 'package:building_draft_app/geometry/model.dart';
+import 'package:building_draft_app/geometry/rooms.dart';
 import 'package:building_draft_app/geometry/vec2.dart';
 import 'package:building_draft_app/state/plan_controller.dart';
 import 'package:building_draft_app/sync/api_client.dart';
@@ -160,6 +161,84 @@ void main() {
       expect((await a.store.outbox(a.session.variantId)).single.errorCode, 'ORIGINAL_LAYOUT_PROTECTED');
       expect(a.session.message, contains('Original Layout'));
       expect((await serverGeometry(a.session.variantId))['walls'], hasLength(8));
+    }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
+
+    test('rooms, doors, windows and a measurement: the real server agrees with the app on areas, shape and fixed lengths', () async {
+      final api = newApi();
+      final a = await deviceA(api);
+      await drawRectangle(a);
+
+      // The room is made through the tool, as a user would: tap inside the loop, name it.
+      a.editor.selectTool(PlanTool.room);
+      a.editor.pointerDown(const Vec2(2000, 1500));
+      a.editor.pointerUp(const Vec2(2000, 1500));
+      expect(a.editor.createRoom('Living room', roomType: 'living_room'), isTrue, reason: a.editor.lastError);
+      a.editor.selectTool(PlanTool.door);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      a.editor.selectTool(PlanTool.window);
+      a.editor.pointerDown(const Vec2(2000, 3000));
+      a.editor.pointerUp(const Vec2(2000, 3000));
+      expect(a.editor.lastError, isNull);
+
+      // Measure the right wall with a laser: inner 2800 mm (3000 mm centerline), which keeps its corners in place.
+      a.editor.selectTool(PlanTool.select);
+      a.editor.pointerDown(const Vec2(4000, 1500));
+      a.editor.pointerUp(const Vec2(4000, 1500));
+      expect(a.editor.applyMeasurement(2800), isTrue, reason: a.editor.lastError);
+      await a.session.flush();
+
+      await a.session.syncNow();
+      expect(a.session.status, SyncStatus.upToDate, reason: a.session.message);
+
+      // What the real server stored:
+      final geometry = await serverGeometry(a.session.variantId);
+      final rooms = (geometry['rooms']! as List).cast<Map<String, Object?>>();
+      expect(rooms, hasLength(1));
+      expect((geometry['openings']! as List), hasLength(2));
+      final fixed = (geometry['constraints']! as List).cast<Map<String, Object?>>().where((c) => c['type'] == 'fixed_length').toList();
+      expect(fixed, hasLength(1));
+      expect((fixed.single['value']! as num).toDouble(), 3000);
+
+      // Two implementations, one answer: the server's own inner area of the room equals the app's.
+      final appArea = roomMetrics(a.editor.model, a.editor.model.rooms.values.single)!.areaSqM;
+      expect((rooms.single['innerAreaM2']! as num).toDouble(), closeTo(appArea, 1e-6));
+      expect(appArea, closeTo(10.64, 1e-9));
+      expect(((geometry['summary']! as Map)['enclosedAreaM2']! as num).toDouble(), closeTo(10.64, 1e-6));
+
+      // A second device that downloads the plan understands the real JSON, including the room nesting and the
+      // enum spellings, and ends with the same plan and the same locked wall.
+      final b = await deviceB(api, a);
+      expect(b.editor.model.rooms.values.single.name, 'Living room');
+      expect(b.editor.model.openings.values.map((o) => o.kind), unorderedEquals([OpeningKind.door, OpeningKind.window]));
+      expect(b.editor.model.fixedLengths.values.single, 3000);
+      expect(roomMetrics(b.editor.model, b.editor.model.rooms.values.single)!.areaSqM, closeTo(appArea, 1e-9));
+
+      // ...and obeys it: dragging a corner of the measured wall is refused on this device without asking the server.
+      final measuredWall = b.editor.model.fixedLengths.keys.single;
+      final corner = b.editor.model.walls[measuredWall]!.endNodeId;
+      final before = b.editor.model.pos(corner);
+      expect(b.editor.execute(MoveNode(corner, before + const Vec2(500, 0))), isFalse);
+      expect(b.editor.lastError, contains('fixed'));
+
+      // A balcony: made from a snapshot-loaded plan, it is stored as an open area and counted apart.
+      b.editor.selectTool(PlanTool.wall);
+      for (final p in const [Vec2(4000, 0), Vec2(6000, 0), Vec2(6000, 3000), Vec2(4000, 3000)]) {
+        b.editor.pointerDown(p);
+        b.editor.pointerUp(p);
+      }
+      b.editor.cancelInteraction();
+      b.editor.selectTool(PlanTool.room);
+      b.editor.pointerDown(const Vec2(5000, 1500));
+      b.editor.pointerUp(const Vec2(5000, 1500));
+      expect(b.editor.createRoom('Balcony', roomType: 'balcony', areaType: RoomAreaType.openArea), isTrue, reason: b.editor.lastError);
+      await b.session.syncNow();
+      expect(b.session.status, SyncStatus.upToDate, reason: b.session.message);
+
+      final after = await serverGeometry(a.session.variantId);
+      final summary = after['summary']! as Map;
+      expect((summary['enclosedAreaM2']! as num).toDouble(), closeTo(10.64, 1e-6));
+      expect((summary['openAreaM2']! as num).toDouble(), closeTo(1.8 * 2.8, 1e-6), reason: 'the balcony is reported apart from the enclosed area');
     }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
 
     test('the same push sent twice is applied once, and a down server leaves the edit queued', () async {

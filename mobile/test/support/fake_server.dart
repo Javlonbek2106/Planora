@@ -37,10 +37,10 @@ class FakeServer {
     }
   }
 
-  /// An edit the editor cannot replay (for example a room made on another device).
+  /// An edit the editor cannot replay yet (changing a wall's thickness, say).
   void otherDeviceRunsUnknownCommand() {
     version++;
-    log.add((type: 'create_room', payload: const {}, version: version));
+    log.add((type: 'update_wall', payload: const {}, version: version));
   }
 
   Future<http.Response> _handle(http.Request request) async {
@@ -73,6 +73,19 @@ class FakeServer {
           'walls': [
             for (final w in model.walls.values)
               {'id': w.id, 'startNodeId': w.startNodeId, 'endNodeId': w.endNodeId, 'thicknessMm': w.thicknessMm, 'heightMm': w.heightMm}
+          ],
+          'rooms': [
+            for (final r in model.rooms.values)
+              {
+                'room': {'id': r.id, 'floorId': floorId, 'name': r.name, 'roomType': r.roomType, 'areaType': r.areaType.wire, 'boundaryWallIds': r.wallIds},
+              }
+          ],
+          'openings': [
+            for (final o in model.openings.values)
+              {'id': o.id, 'wallId': o.wallId, 'kind': o.kind.name, 'offsetMm': o.offsetMm, 'widthMm': o.widthMm, 'heightMm': o.heightMm, 'sillMm': o.sillMm}
+          ],
+          'constraints': [
+            for (final e in model.fixedLengths.entries) {'id': 'c-${e.key}', 'type': 'fixed_length', 'targets': [e.key], 'value': e.value}
           ],
         };
       default:
@@ -147,7 +160,7 @@ class FakeServer {
     if (since >= version) return {'variants': [{'variantId': variantId, 'found': true, 'currentVersion': version, 'snapshotRequired': false, 'operations': <Object>[]}]};
 
     final missed = log.where((e) => e.version > since).toList();
-    final replayable = !snapshotOnlyPull && missed.length == version - since && missed.every((e) => e.type != 'create_room');
+    final replayable = !snapshotOnlyPull && missed.length == version - since && missed.every((e) => e.type != 'update_wall');
     return {
       'variants': [
         {

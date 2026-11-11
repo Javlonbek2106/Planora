@@ -5,12 +5,27 @@ import 'package:flutter/foundation.dart';
 import '../geometry/commands.dart';
 import '../geometry/hit_test.dart';
 import '../geometry/model.dart';
+import '../geometry/rooms.dart';
 import '../geometry/snap.dart';
 import '../geometry/validation.dart';
 import '../geometry/vec2.dart';
 import 'viewport.dart';
 
-enum PlanTool { select, wall }
+enum PlanTool { select, wall, room, door, window }
+
+/// Where a door or window would go if the pointer were pressed now.
+class OpeningPreview {
+  const OpeningPreview({required this.wallId, required this.offsetMm, required this.widthMm, required this.kind});
+
+  final String wallId;
+  final double offsetMm;
+  final double widthMm;
+  final OpeningKind kind;
+}
+
+/// Sizes a new door or window starts with (the user can change them later).
+({double width, double height, double sill}) defaultOpeningSize(OpeningKind kind) =>
+    kind == OpeningKind.door ? (width: 900, height: 2100, sill: 0) : (width: 1200, height: 1200, sill: 900);
 
 /// Everything the 2D Constructor knows: the plan, the history, the current tool and the interaction in progress.
 /// Pointer handling lives here (not in the widget) so that drawing, snapping and dragging can be tested
@@ -46,7 +61,21 @@ class PlanController extends ChangeNotifier {
 
   String? selectedWallId;
   String? selectedNodeId;
+  String? selectedRoomId;
+  String? selectedOpeningId;
   String? lastError;
+
+  /// Room tool: a closed area the user tapped that is not a room yet. The screen asks for a name, then calls
+  /// [createRoom] (or [cancelRoomProposal]).
+  PlanFace? roomProposal;
+
+  /// Door/window tools: the opening that would be placed at the pointer.
+  OpeningPreview? openingPreview;
+
+  // Select tool: an opening being slid along its wall.
+  String? dragOpeningId;
+  double? dragOpeningOffset;
+  double _dragOpeningGrab = 0;
 
   // Wall tool: the point the next wall starts from (a chain of walls keeps going from the last end).
   SnapResult? draftStart;
@@ -112,6 +141,8 @@ class PlanController extends ChangeNotifier {
     _redoLog.clear();
     selectedWallId = null;
     selectedNodeId = null;
+    selectedRoomId = null;
+    selectedOpeningId = null;
     lastError = null;
     cancelInteraction();
     notifyListeners();
@@ -160,6 +191,8 @@ class PlanController extends ChangeNotifier {
   void _dropStaleSelection() {
     if (selectedWallId != null && !_model.walls.containsKey(selectedWallId)) selectedWallId = null;
     if (selectedNodeId != null && !_model.nodes.containsKey(selectedNodeId)) selectedNodeId = null;
+    if (selectedRoomId != null && !_model.rooms.containsKey(selectedRoomId)) selectedRoomId = null;
+    if (selectedOpeningId != null && !_model.openings.containsKey(selectedOpeningId)) selectedOpeningId = null;
   }
 
   // ---- tools ----
@@ -167,6 +200,9 @@ class PlanController extends ChangeNotifier {
   void selectTool(PlanTool next) {
     tool = next;
     cancelInteraction();
+    if (next != PlanTool.select) {
+      selectedWallId = selectedNodeId = selectedRoomId = selectedOpeningId = null;
+    }
     notifyListeners();
   }
 
@@ -175,10 +211,17 @@ class PlanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True when something is selected that Delete can remove.
+  bool get hasSelection => selectedWallId != null || selectedNodeId != null || selectedRoomId != null || selectedOpeningId != null;
+
   void deleteSelection() {
     final wallId = selectedWallId;
     final nodeId = selectedNodeId;
-    if (wallId != null) {
+    if (selectedOpeningId != null) {
+      execute(RemoveOpening(selectedOpeningId!));
+    } else if (selectedRoomId != null) {
+      execute(DeleteRoom(selectedRoomId!));
+    } else if (wallId != null) {
       execute(DeleteWall(wallId));
     } else if (nodeId != null) {
       final walls = _model.wallsAt(nodeId).toList();
@@ -210,6 +253,10 @@ class PlanController extends ChangeNotifier {
   void cancelInteraction() {
     draftStart = null;
     hover = null;
+    roomProposal = null;
+    openingPreview = null;
+    dragOpeningId = null;
+    dragOpeningOffset = null;
     dragNodeId = null;
     dragPosition = null;
     _startedThisPress = false;
@@ -230,6 +277,11 @@ class PlanController extends ChangeNotifier {
 
   /// Pointer moved without a button pressed: shows where a wall would snap to.
   void hoverAt(Vec2 plan) {
+    if (tool == PlanTool.door || tool == PlanTool.window) {
+      openingPreview = _openingAt(plan, tool == PlanTool.door ? OpeningKind.door : OpeningKind.window);
+      notifyListeners();
+      return;
+    }
     if (tool != PlanTool.wall) return;
     hover = _snap(plan, anchor: draftStart?.point);
     notifyListeners();
@@ -255,13 +307,33 @@ class PlanController extends ChangeNotifier {
       return true;
     }
 
+    if (tool == PlanTool.room) {
+      _proposeRoom(plan);
+      notifyListeners();
+      return true;
+    }
+    if (tool == PlanTool.door || tool == PlanTool.window) {
+      _placeOpening(plan, tool == PlanTool.door ? OpeningKind.door : OpeningKind.window);
+      notifyListeners();
+      return true;
+    }
+
     final hit = hitTest(_model, plan, viewport.pxPerMm);
     selectedNodeId = hit is NodeHit ? hit.nodeId : null;
     selectedWallId = hit is WallHit ? hit.wallId : null;
+    selectedOpeningId = hit is OpeningHit ? hit.openingId : null;
+    selectedRoomId = hit is RoomHit ? hit.roomId : null;
     dragNodeId = hit is NodeHit ? hit.nodeId : null;
     dragPosition = hit is NodeHit ? _model.pos(hit.nodeId) : null;
+
+    if (hit is OpeningHit) {
+      final opening = _model.openings[hit.openingId]!;
+      dragOpeningId = opening.id;
+      dragOpeningOffset = opening.offsetMm;
+      _dragOpeningGrab = _along(opening.wallId, plan) - opening.offsetMm;
+    }
     notifyListeners();
-    return hit != null;
+    return hit != null && hit is! RoomHit; // pressing a room's empty inside pans, like empty space
   }
 
   void pointerMove(Vec2 plan) {
@@ -270,6 +342,13 @@ class PlanController extends ChangeNotifier {
 
     if (tool == PlanTool.wall) {
       hover = _snap(plan, anchor: draftStart?.point);
+    } else if (tool == PlanTool.door || tool == PlanTool.window) {
+      openingPreview = _openingAt(plan, tool == PlanTool.door ? OpeningKind.door : OpeningKind.window);
+    } else if (dragOpeningId != null) {
+      final opening = _model.openings[dragOpeningId]!;
+      final length = _model.length(_model.walls[opening.wallId]!);
+      final raw = _along(opening.wallId, plan) - _dragOpeningGrab;
+      dragOpeningOffset = ((raw / 50).roundToDouble() * 50).clamp(0.0, length - opening.widthMm);
     } else if (dragNodeId != null) {
       final snapped = _snap(plan, exclude: {dragNodeId!});
       dragPosition = snapped.point;
@@ -284,6 +363,25 @@ class PlanController extends ChangeNotifier {
         final end = _snap(plan, anchor: draftStart!.point);
         _commitWall(end, continueChain: false);
       }
+    } else if (dragOpeningId != null) {
+      final opening = _model.openings[dragOpeningId]!;
+      final target = dragOpeningOffset;
+      if (target != null && _movedThisPress && target != opening.offsetMm) {
+        execute(CommandSequence('Move ${opening.kind.name}', [
+          RemoveOpening(opening.id),
+          AttachOpening(
+            openingId: opening.id,
+            wallId: opening.wallId,
+            kind: opening.kind,
+            offsetMm: target,
+            widthMm: opening.widthMm,
+            heightMm: opening.heightMm,
+            sillMm: opening.sillMm,
+          ),
+        ]));
+      }
+      dragOpeningId = null;
+      dragOpeningOffset = null;
     } else if (dragNodeId != null) {
       final nodeId = dragNodeId!;
       final target = dragPosition;
@@ -348,5 +446,113 @@ class PlanController extends ChangeNotifier {
     }
     if (best == null) throw const PlanException('WALL_NOT_FOUND', 'No wall under the snapped point.');
     return (best, bestT);
+  }
+
+  // ---- rooms ----
+
+  void _proposeRoom(Vec2 plan) {
+    final face = faceAt(_model, plan);
+    if (face == null) {
+      lastError = 'No closed area here. Close a loop of walls first.';
+      return;
+    }
+
+    final walls = face.wallIds.toSet();
+    for (final room in _model.rooms.values) {
+      if (room.wallIds.toSet().length == walls.length && room.wallIds.toSet().containsAll(walls)) {
+        selectedRoomId = room.id;
+        lastError = '"${room.name}" is already a room.';
+        return;
+      }
+    }
+    roomProposal = face;
+  }
+
+  /// Makes the proposed area a room. Returns false (with [lastError]) if the plan refuses it.
+  bool createRoom(String name, {String roomType = 'other', RoomAreaType areaType = RoomAreaType.enclosed}) {
+    final face = roomProposal;
+    if (face == null) return false;
+    final ok = execute(CreateRoom(roomId: _ids(), name: name, wallIds: face.wallIds, roomType: roomType, areaType: areaType));
+    if (ok) roomProposal = null;
+    return ok;
+  }
+
+  void cancelRoomProposal() {
+    roomProposal = null;
+    notifyListeners();
+  }
+
+  // ---- doors and windows ----
+
+  ({String wallId, double along})? _wallNear(Vec2 plan) {
+    final tolerance = 14 / viewport.pxPerMm;
+    String? best;
+    var bestDistance = double.infinity;
+    for (final wall in _model.walls.values) {
+      final reach = wall.thicknessMm / 2 > tolerance ? wall.thicknessMm / 2 : tolerance;
+      final distance = closestOnSegment(_model.pos(wall.startNodeId), _model.pos(wall.endNodeId), plan).point.distanceTo(plan);
+      if (distance <= reach && distance < bestDistance) {
+        bestDistance = distance;
+        best = wall.id;
+      }
+    }
+    return best == null ? null : (wallId: best, along: _along(best, plan));
+  }
+
+  /// Distance of [plan] along a wall from its start, in mm.
+  double _along(String wallId, Vec2 plan) {
+    final wall = _model.walls[wallId]!;
+    final start = _model.pos(wall.startNodeId);
+    final end = _model.pos(wall.endNodeId);
+    return closestOnSegment(start, end, plan).t * start.distanceTo(end);
+  }
+
+  OpeningPreview? _openingAt(Vec2 plan, OpeningKind kind) {
+    final near = _wallNear(plan);
+    if (near == null) return null;
+    final size = defaultOpeningSize(kind);
+    final length = _model.length(_model.walls[near.wallId]!);
+    if (length < size.width) return null;
+    final offset = ((near.along - size.width / 2) / 50).roundToDouble() * 50;
+    return OpeningPreview(wallId: near.wallId, offsetMm: offset.clamp(0.0, length - size.width), widthMm: size.width, kind: kind);
+  }
+
+  void _placeOpening(Vec2 plan, OpeningKind kind) {
+    final noun = kind == OpeningKind.door ? 'door' : 'window';
+    final near = _wallNear(plan);
+    if (near == null) {
+      lastError = 'Tap a wall to place a $noun.';
+      return;
+    }
+    final preview = _openingAt(plan, kind);
+    if (preview == null) {
+      lastError = 'This wall is too short for a $noun.';
+      return;
+    }
+
+    final size = defaultOpeningSize(kind);
+    final ok = execute(AttachOpening(
+      openingId: _ids(),
+      wallId: preview.wallId,
+      kind: kind,
+      offsetMm: preview.offsetMm,
+      widthMm: size.width,
+      heightMm: size.height,
+      sillMm: size.sill,
+    ));
+    if (ok) openingPreview = null;
+  }
+
+  // ---- measurements ----
+
+  /// Fixes the selected wall to a measured length ([inner] = between the wall faces, otherwise centerline).
+  bool applyMeasurement(double valueMm, {bool inner = true}) {
+    final wallId = selectedWallId;
+    if (wallId == null) {
+      lastError = 'Select a wall to measure first.';
+      notifyListeners();
+      return false;
+    }
+    return execute(ApplyMeasurement(wallId: wallId, valueMm: valueMm, inner: inner));
   }
 }

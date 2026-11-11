@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'rooms.dart';
 import 'vec2.dart';
 
 sealed class PlanHit {
@@ -11,14 +12,27 @@ class NodeHit extends PlanHit {
   final String nodeId;
 }
 
+class OpeningHit extends PlanHit {
+  const OpeningHit(this.openingId);
+
+  final String openingId;
+}
+
 class WallHit extends PlanHit {
   const WallHit(this.wallId);
 
   final String wallId;
 }
 
-/// What is under a pointer: a corner first (it sits on top of walls), then a wall. A wall counts as hit within
-/// its own half-thickness, but never less than [tolerancePx] so thin walls stay easy to tap on a phone.
+class RoomHit extends PlanHit {
+  const RoomHit(this.roomId);
+
+  final String roomId;
+}
+
+/// What is under a pointer, most specific first: a corner (it sits on top of walls), then a door or window, then a
+/// wall, then a room (only the empty inside of one). A wall counts as hit within its own half-thickness, but never
+/// less than [tolerancePx] so thin walls stay easy to tap on a phone.
 PlanHit? hitTest(PlanModel model, Vec2 point, double pxPerMm, {double tolerancePx = 12}) {
   final tolerance = tolerancePx / pxPerMm;
 
@@ -43,5 +57,32 @@ PlanHit? hitTest(PlanModel model, Vec2 point, double pxPerMm, {double toleranceP
       nearestWall = wall.id;
     }
   }
-  return nearestWall == null ? null : WallHit(nearestWall);
+
+  if (nearestWall != null) {
+    for (final opening in model.openingsOn(nearestWall)) {
+      final wall = model.walls[nearestWall]!;
+      final start = model.pos(wall.startNodeId);
+      final length = model.length(wall);
+      final along = closestOnSegment(start, model.pos(wall.endNodeId), point).t * length;
+      if (along >= opening.offsetMm && along <= opening.offsetMm + opening.widthMm) return OpeningHit(opening.id);
+    }
+    return WallHit(nearestWall);
+  }
+
+  for (final room in model.rooms.values) {
+    final polygon = innerPolygon(model, room);
+    if (polygon != null && _inside(polygon, point)) return RoomHit(room.id);
+  }
+  return null;
+}
+
+bool _inside(List<Vec2> polygon, Vec2 p) {
+  var inside = false;
+  for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    if ((polygon[i].y > p.y) != (polygon[j].y > p.y) &&
+        p.x < (polygon[j].x - polygon[i].x) * (p.y - polygon[i].y) / (polygon[j].y - polygon[i].y) + polygon[i].x) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }

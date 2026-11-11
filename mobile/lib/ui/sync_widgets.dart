@@ -58,8 +58,8 @@ Future<void> showConnectDialog(BuildContext context, AppController app) {
       listenable: app,
       builder: (context, _) => AlertDialog(
         title: const Text('Connect to a server'),
-        content: SizedBox(
-          width: 380,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

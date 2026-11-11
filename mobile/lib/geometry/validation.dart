@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'rooms.dart';
 import 'vec2.dart';
 
 class PlanIssue {
@@ -14,6 +15,7 @@ class PlanIssue {
 
 const _epsilonMm = 1e-6;
 const _minWallLengthMm = 1.0;
+const _fixedToleranceMm = 0.01;
 
 /// The walls an edit touched: new or altered walls, and every wall on a corner that appeared or moved.
 Set<String> changedWalls(PlanModel before, PlanModel after) {
@@ -79,8 +81,63 @@ List<PlanIssue> validatePlan(PlanModel model, {Set<String>? only}) {
       }
     }
   }
+  issues.addAll(_validateRooms(model));
+  issues.addAll(_validateOpenings(model));
+  issues.addAll(_validateFixedLengths(model));
   return issues;
 }
+
+List<PlanIssue> _validateRooms(PlanModel model) => [
+      for (final room in model.rooms.values)
+        if (roomLoop(model, room) == null) PlanIssue('ROOM_NOT_CLOSED', 'The room "${room.name}" is no longer a closed loop of walls.', room.id),
+    ];
+
+List<PlanIssue> _validateOpenings(PlanModel model) {
+  final issues = <PlanIssue>[];
+  final byWall = <String, List<PlanOpening>>{};
+  for (final o in model.openings.values) {
+    (byWall[o.wallId] ??= []).add(o);
+  }
+
+  for (final entry in byWall.entries) {
+    final wall = model.walls[entry.key];
+    if (wall == null || !model.nodes.containsKey(wall.startNodeId) || !model.nodes.containsKey(wall.endNodeId)) {
+      issues.addAll([for (final o in entry.value) PlanIssue('OPENING_WALL_MISSING', 'An opening is not on an existing wall.', o.id)]);
+      continue;
+    }
+
+    final length = model.length(wall);
+    final fits = <PlanOpening>[];
+    for (final o in entry.value) {
+      final noun = o.kind == OpeningKind.door ? 'door' : 'window';
+      if (o.widthMm <= 0 || o.heightMm <= 0 || o.sillMm < 0) {
+        issues.add(PlanIssue('OPENING_INVALID_SIZE', 'The $noun has an invalid size.', o.id));
+      } else if (o.offsetMm < 0 || o.offsetMm + o.widthMm > length + _epsilonMm) {
+        issues.add(PlanIssue('OPENING_OUT_OF_BOUNDS', 'The $noun does not fit within the wall length.', o.id));
+      } else if (o.sillMm + o.heightMm > wall.heightMm + _epsilonMm) {
+        issues.add(PlanIssue('OPENING_OUT_OF_BOUNDS', 'The $noun does not fit within the wall height.', o.id));
+      } else {
+        fits.add(o);
+      }
+    }
+
+    fits.sort((a, b) => a.offsetMm.compareTo(b.offsetMm));
+    for (var i = 1; i < fits.length; i++) {
+      if (fits[i].offsetMm < fits[i - 1].offsetMm + fits[i - 1].widthMm - _epsilonMm) {
+        issues.add(PlanIssue('OPENING_OVERLAP', 'Openings on the same wall overlap.', fits[i].id));
+      }
+    }
+  }
+  return issues;
+}
+
+/// A measured wall keeps its length. The server enforces this with a constraint and solves around it; refusing the
+/// edit here keeps both sides on the same plan instead of letting the server move corners the editor did not.
+List<PlanIssue> _validateFixedLengths(PlanModel model) => [
+      for (final entry in model.fixedLengths.entries)
+        if (model.walls[entry.key] case final wall? when model.length(wall) - entry.value > _fixedToleranceMm || entry.value - model.length(wall) > _fixedToleranceMm)
+          PlanIssue('LENGTH_LOCKED', 'This wall is fixed to ${(entry.value / 1000).toStringAsFixed(2)} m by a measurement; its length cannot change.', entry.key),
+    ];
 
 bool _segmentsTouch(Vec2 p1, Vec2 p2, Vec2 q1, Vec2 q2) {
   final d1 = p2 - p1;

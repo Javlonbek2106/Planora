@@ -47,16 +47,92 @@ class PlanWall {
   bool touches(String nodeId) => nodeId == startNodeId || nodeId == endNodeId;
 }
 
-/// One floor's walls and corners. Immutable: every change makes a new model, which is what makes undo a plain
-/// "go back to the previous model" and keeps the canvas free of half-applied states.
+enum OpeningKind { door, window }
+
+enum RoomAreaType {
+  enclosed,
+
+  /// Balcony, loggia, terrace: counted separately from the enclosed area.
+  openArea;
+
+  /// The name the server uses in JSON.
+  String get wire => this == enclosed ? 'enclosed' : 'open_area';
+
+  static RoomAreaType fromWire(String value) => value == 'open_area' ? openArea : enclosed;
+}
+
+/// A door or window in a wall, positioned by [offsetMm] from the wall's start.
+class PlanOpening {
+  const PlanOpening({
+    required this.id,
+    required this.wallId,
+    required this.kind,
+    required this.offsetMm,
+    required this.widthMm,
+    required this.heightMm,
+    this.sillMm = 0,
+  });
+
+  final String id;
+  final String wallId;
+  final OpeningKind kind;
+  final double offsetMm;
+  final double widthMm;
+  final double heightMm;
+  final double sillMm;
+
+  PlanOpening copyWith({String? wallId, double? offsetMm}) => PlanOpening(
+        id: id,
+        wallId: wallId ?? this.wallId,
+        kind: kind,
+        offsetMm: offsetMm ?? this.offsetMm,
+        widthMm: widthMm,
+        heightMm: heightMm,
+        sillMm: sillMm,
+      );
+}
+
+class PlanRoom {
+  const PlanRoom({
+    required this.id,
+    required this.name,
+    required this.wallIds,
+    this.roomType = 'other',
+    this.areaType = RoomAreaType.enclosed,
+  });
+
+  final String id;
+  final String name;
+  final String roomType;
+  final RoomAreaType areaType;
+  final List<String> wallIds;
+}
+
+/// One floor's walls, corners, rooms and openings. Immutable: every change makes a new model, which is what makes
+/// undo a plain "go back to the previous model" and keeps the canvas free of half-applied states.
 class PlanModel {
-  PlanModel({required this.floorId, Map<String, PlanNode> nodes = const {}, Map<String, PlanWall> walls = const {}})
-      : nodes = Map.unmodifiable(nodes),
-        walls = Map.unmodifiable(walls);
+  PlanModel({
+    required this.floorId,
+    Map<String, PlanNode> nodes = const {},
+    Map<String, PlanWall> walls = const {},
+    Map<String, PlanRoom> rooms = const {},
+    Map<String, PlanOpening> openings = const {},
+    Map<String, double> fixedLengths = const {},
+  })  : nodes = Map.unmodifiable(nodes),
+        walls = Map.unmodifiable(walls),
+        rooms = Map.unmodifiable(rooms),
+        openings = Map.unmodifiable(openings),
+        fixedLengths = Map.unmodifiable(fixedLengths);
 
   final String floorId;
   final Map<String, PlanNode> nodes;
   final Map<String, PlanWall> walls;
+  final Map<String, PlanRoom> rooms;
+  final Map<String, PlanOpening> openings;
+
+  /// Walls whose centerline length was fixed by a measurement (wall id -> mm). The server keeps these as
+  /// constraints, so an edit that would change such a length has to be refused here as well.
+  final Map<String, double> fixedLengths;
 
   Vec2 pos(String nodeId) => nodes[nodeId]!.position;
 
@@ -64,8 +140,24 @@ class PlanModel {
 
   Iterable<PlanWall> wallsAt(String nodeId) => walls.values.where((w) => w.touches(nodeId));
 
-  PlanModel copyWith({Map<String, PlanNode>? nodes, Map<String, PlanWall>? walls}) =>
-      PlanModel(floorId: floorId, nodes: nodes ?? this.nodes, walls: walls ?? this.walls);
+  Iterable<PlanOpening> openingsOn(String wallId) => openings.values.where((o) => o.wallId == wallId);
+
+  PlanModel copyWith({
+    Map<String, PlanNode>? nodes,
+    Map<String, PlanWall>? walls,
+    Map<String, PlanRoom>? rooms,
+    Map<String, PlanOpening>? openings,
+    Map<String, double>? fixedLengths,
+    String? floorId,
+  }) =>
+      PlanModel(
+        floorId: floorId ?? this.floorId,
+        nodes: nodes ?? this.nodes,
+        walls: walls ?? this.walls,
+        rooms: rooms ?? this.rooms,
+        openings: openings ?? this.openings,
+        fixedLengths: fixedLengths ?? this.fixedLengths,
+      );
 
   Map<String, Object?> toJson() => {
         'floorId': floorId,
@@ -80,23 +172,67 @@ class PlanModel {
               'heightMm': w.heightMm,
             }
         ],
+        'rooms': [
+          for (final r in rooms.values)
+            {'id': r.id, 'name': r.name, 'roomType': r.roomType, 'areaType': r.areaType.wire, 'wallIds': r.wallIds}
+        ],
+        'openings': [
+          for (final o in openings.values)
+            {
+              'id': o.id,
+              'wallId': o.wallId,
+              'kind': o.kind.name,
+              'offsetMm': o.offsetMm,
+              'widthMm': o.widthMm,
+              'heightMm': o.heightMm,
+              'sillMm': o.sillMm,
+            }
+        ],
+        'fixedLengths': fixedLengths,
       };
 
-  factory PlanModel.fromJson(Map<String, Object?> json) => PlanModel(
-        floorId: json['floorId']! as String,
-        nodes: {
-          for (final n in (json['nodes']! as List).cast<Map<String, Object?>>())
-            n['id']! as String: PlanNode(n['id']! as String, (n['x']! as num).toDouble(), (n['y']! as num).toDouble())
-        },
-        walls: {
-          for (final w in (json['walls']! as List).cast<Map<String, Object?>>())
-            w['id']! as String: PlanWall(
-              id: w['id']! as String,
-              startNodeId: w['startNodeId']! as String,
-              endNodeId: w['endNodeId']! as String,
-              thicknessMm: (w['thicknessMm']! as num).toDouble(),
-              heightMm: (w['heightMm']! as num).toDouble(),
-            )
-        },
-      );
+  /// Reads a stored plan; plans saved before rooms and openings existed simply have none.
+  factory PlanModel.fromJson(Map<String, Object?> json) {
+    List<Map<String, Object?>> list(String key) => ((json[key] ?? const []) as List).cast<Map<String, Object?>>();
+
+    return PlanModel(
+      floorId: json['floorId']! as String,
+      nodes: {
+        for (final n in list('nodes')) n['id']! as String: PlanNode(n['id']! as String, (n['x']! as num).toDouble(), (n['y']! as num).toDouble())
+      },
+      walls: {
+        for (final w in list('walls'))
+          w['id']! as String: PlanWall(
+            id: w['id']! as String,
+            startNodeId: w['startNodeId']! as String,
+            endNodeId: w['endNodeId']! as String,
+            thicknessMm: (w['thicknessMm']! as num).toDouble(),
+            heightMm: (w['heightMm']! as num).toDouble(),
+          )
+      },
+      rooms: {
+        for (final r in list('rooms'))
+          r['id']! as String: PlanRoom(
+            id: r['id']! as String,
+            name: r['name']! as String,
+            roomType: r['roomType']! as String,
+            areaType: RoomAreaType.fromWire(r['areaType']! as String),
+            wallIds: (r['wallIds']! as List).cast<String>(),
+          )
+      },
+      openings: {
+        for (final o in list('openings'))
+          o['id']! as String: PlanOpening(
+            id: o['id']! as String,
+            wallId: o['wallId']! as String,
+            kind: OpeningKind.values.byName(o['kind']! as String),
+            offsetMm: (o['offsetMm']! as num).toDouble(),
+            widthMm: (o['widthMm']! as num).toDouble(),
+            heightMm: (o['heightMm']! as num).toDouble(),
+            sillMm: (o['sillMm']! as num).toDouble(),
+          )
+      },
+      fixedLengths: {for (final e in ((json['fixedLengths'] ?? const {}) as Map).entries) e.key as String: (e.value as num).toDouble()},
+    );
+  }
 }

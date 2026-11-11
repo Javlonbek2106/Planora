@@ -30,13 +30,37 @@ PlanCommand? decodeServerCommand(String type, Map<String, Object?> p) {
         newNodeId: p['newNodeId']! as String,
         atMm: _num(p['atMm']),
       );
+    case 'create_room':
+      return CreateRoom(
+        roomId: p['roomId']! as String,
+        name: p['name']! as String,
+        wallIds: (p['wallIds']! as List).cast<String>(),
+        roomType: (p['roomType'] ?? 'other') as String,
+        areaType: RoomAreaType.fromWire((p['areaType'] ?? 'enclosed') as String),
+      );
+    case 'delete_room':
+      return DeleteRoom(p['roomId']! as String);
+    case 'attach_opening':
+      return AttachOpening(
+        openingId: p['openingId']! as String,
+        wallId: p['wallId']! as String,
+        kind: OpeningKind.values.byName(p['kind']! as String),
+        offsetMm: _num(p['offsetMm']),
+        widthMm: _num(p['widthMm']),
+        heightMm: _num(p['heightMm']),
+        sillMm: p['sillMm'] == null ? 0 : _num(p['sillMm']),
+      );
+    case 'remove_opening':
+      return RemoveOpening(p['openingId']! as String);
+    case 'apply_measurement':
+      return ApplyMeasurement(wallId: p['wallId']! as String, valueMm: _num(p['valueMm']), inner: (p['reference'] ?? 'inner') == 'inner');
     default:
       return null;
   }
 }
 
-/// The walls and corners of one floor from a `GET .../geometry` response. Everything else the server stores
-/// (rooms, openings, constraints) is not shown by the editor yet and is left alone here.
+/// One floor of a `GET .../geometry` response: walls, corners, rooms, openings and the lengths fixed by measurements.
+/// Other constraints the server may hold (angles, parallel...) are not edited by the app and are not read.
 PlanModel modelFromSnapshot(Map<String, Object?> geometry, String floorId) {
   final nodes = {
     for (final n in (geometry['nodes']! as List).cast<Map<String, Object?>>())
@@ -53,11 +77,56 @@ PlanModel modelFromSnapshot(Map<String, Object?> geometry, String floorId) {
           heightMm: _num(w['heightMm']),
         ),
   };
-  return PlanModel(floorId: floorId, nodes: nodes, walls: walls);
+
+  final rooms = {
+    for (final entry in ((geometry['rooms'] ?? const []) as List).cast<Map<String, Object?>>())
+      if ((entry['room']! as Map)['floorId'] == floorId)
+        (entry['room']! as Map)['id']! as String: () {
+          final r = (entry['room']! as Map).cast<String, Object?>();
+          return PlanRoom(
+            id: r['id']! as String,
+            name: r['name']! as String,
+            roomType: r['roomType']! as String,
+            areaType: RoomAreaType.fromWire(r['areaType']! as String),
+            wallIds: (r['boundaryWallIds']! as List).cast<String>(),
+          );
+        }(),
+  };
+
+  final openings = {
+    for (final o in ((geometry['openings'] ?? const []) as List).cast<Map<String, Object?>>())
+      if (walls.containsKey(o['wallId']))
+        o['id']! as String: PlanOpening(
+          id: o['id']! as String,
+          wallId: o['wallId']! as String,
+          kind: OpeningKind.values.byName(o['kind']! as String),
+          offsetMm: _num(o['offsetMm']),
+          widthMm: _num(o['widthMm']),
+          heightMm: _num(o['heightMm']),
+          sillMm: _num(o['sillMm']),
+        ),
+  };
+
+  final fixedLengths = {
+    for (final c in ((geometry['constraints'] ?? const []) as List).cast<Map<String, Object?>>())
+      if (c['type'] == 'fixed_length' && walls.containsKey((c['targets']! as List).first)) (c['targets']! as List).first as String: _num(c['value']),
+  };
+
+  return PlanModel(floorId: floorId, nodes: nodes, walls: walls, rooms: rooms, openings: openings, fixedLengths: fixedLengths);
 }
 
-/// A drawing made before the device was connected, as commands the server can replay (one per wall).
+/// A drawing made before the device was connected, as commands the server can replay: walls first, then the rooms
+/// and openings that need them, then the measurements (as centerline lengths, which keeps the corners where they are).
 List<PlanCommand> commandsForModel(PlanModel model) => [
+      ..._wallCommands(model),
+      for (final room in model.rooms.values)
+        CreateRoom(roomId: room.id, name: room.name, wallIds: room.wallIds, roomType: room.roomType, areaType: room.areaType),
+      for (final o in model.openings.values)
+        AttachOpening(openingId: o.id, wallId: o.wallId, kind: o.kind, offsetMm: o.offsetMm, widthMm: o.widthMm, heightMm: o.heightMm, sillMm: o.sillMm),
+      for (final e in model.fixedLengths.entries) ApplyMeasurement(wallId: e.key, valueMm: e.value, inner: false),
+    ];
+
+List<PlanCommand> _wallCommands(PlanModel model) => [
       for (final wall in model.walls.values)
         CreateWall(
           wallId: wall.id,

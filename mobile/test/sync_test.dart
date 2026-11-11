@@ -227,6 +227,97 @@ void main() {
     });
   });
 
+  group('rooms, openings and measurements', () {
+    Future<Harness> withRectangle() async {
+      final h = await Harness.create();
+      await h.edit(const CreateWall(wallId: 'w1', startNodeId: 'n1', start: Vec2(0, 0), endNodeId: 'n2', end: Vec2(4000, 0)));
+      await h.edit(const CreateWall(wallId: 'w2', startNodeId: 'n2', start: Vec2(4000, 0), endNodeId: 'n3', end: Vec2(4000, 3000)));
+      await h.edit(const CreateWall(wallId: 'w3', startNodeId: 'n3', start: Vec2(4000, 3000), endNodeId: 'n4', end: Vec2(0, 3000)));
+      await h.edit(const CreateWall(wallId: 'w4', startNodeId: 'n4', start: Vec2(0, 3000), endNodeId: 'n1', end: Vec2(0, 0)));
+      return h;
+    }
+
+    test('a room, a door and a measurement are queued offline and sent in order', () async {
+      final h = await withRectangle();
+      await h.edit(const CreateRoom(roomId: 'r1', name: 'Living', wallIds: ['w1', 'w2', 'w3', 'w4']));
+      await h.edit(const AttachOpening(openingId: 'o1', wallId: 'w1', kind: OpeningKind.door, offsetMm: 500, widthMm: 900, heightMm: 2100));
+      await h.edit(const ApplyMeasurement(wallId: 'w4', valueMm: 2800));
+
+      expect((await h.outbox()).map((o) => o.commandType).skip(4), ['create_room', 'attach_opening', 'apply_measurement']);
+      await h.session.syncNow();
+
+      expect(h.session.status, SyncStatus.upToDate, reason: h.session.message);
+      expect(h.server.model.rooms.keys, ['r1']);
+      expect(h.server.model.openings.keys, ['o1']);
+      expect(h.server.model.fixedLengths['w4'], 3000);
+    });
+
+    test('a room and a door made on another device are replayed, not reloaded', () async {
+      final h = await withRectangle();
+      await h.session.syncNow();
+
+      h.server.otherDeviceEdits(const CreateRoom(roomId: 'r9', name: 'Kitchen', wallIds: ['w1', 'w2', 'w3', 'w4']));
+      h.server.otherDeviceEdits(const AttachOpening(openingId: 'o9', wallId: 'w2', kind: OpeningKind.window, offsetMm: 800, widthMm: 1200, heightMm: 1200, sillMm: 900));
+      await h.session.syncNow();
+
+      expect(h.controller.model.rooms['r9']!.name, 'Kitchen');
+      expect(h.controller.model.openings['o9']!.kind, OpeningKind.window);
+      expect(h.session.message, isNull, reason: 'a plain replay');
+    });
+
+    test('a snapshot brings rooms, openings and measured lengths along', () async {
+      final h = await withRectangle();
+      await h.session.syncNow();
+      h.server.otherDeviceEdits(const CreateRoom(roomId: 'r9', name: 'Kitchen', wallIds: ['w1', 'w2', 'w3', 'w4']));
+      h.server.otherDeviceEdits(const AttachOpening(openingId: 'o9', wallId: 'w2', kind: OpeningKind.door, offsetMm: 500, widthMm: 900, heightMm: 2100));
+      h.server.otherDeviceEdits(const ApplyMeasurement(wallId: 'w1', valueMm: 3800));
+      h.server.snapshotOnlyPull = true;
+
+      await h.session.syncNow();
+
+      final m = h.controller.model;
+      expect(m.rooms['r9']!.wallIds, hasLength(4));
+      expect(m.openings['o9']!.offsetMm, 500);
+      expect(m.fixedLengths['w1'], 4000);
+    });
+
+    test('after a pull the measured wall is locked here too', () async {
+      final h = await withRectangle();
+      await h.session.syncNow();
+      h.server.otherDeviceEdits(const ApplyMeasurement(wallId: 'w1', valueMm: 3800));
+      await h.session.syncNow();
+
+      final dragged = h.controller.execute(const MoveNode('n2', Vec2(4500, 0)));
+
+      expect(dragged, isFalse);
+      expect(h.controller.lastError, contains('fixed'));
+    });
+
+    test('a drawing with rooms, openings and measurements made before connecting is uploaded whole', () async {
+      var scratch = PlanModel(floorId: 'scratch');
+      for (final c in const [
+        CreateWall(wallId: 'w1', startNodeId: 'n1', start: Vec2(0, 0), endNodeId: 'n2', end: Vec2(4000, 0)),
+        CreateWall(wallId: 'w2', startNodeId: 'n2', start: Vec2(4000, 0), endNodeId: 'n3', end: Vec2(4000, 3000)),
+        CreateWall(wallId: 'w3', startNodeId: 'n3', start: Vec2(4000, 3000), endNodeId: 'n4', end: Vec2(0, 3000)),
+        CreateWall(wallId: 'w4', startNodeId: 'n4', start: Vec2(0, 3000), endNodeId: 'n1', end: Vec2(0, 0)),
+        CreateRoom(roomId: 'r1', name: 'Living', wallIds: ['w1', 'w2', 'w3', 'w4']),
+        AttachOpening(openingId: 'o1', wallId: 'w1', kind: OpeningKind.door, offsetMm: 500, widthMm: 900, heightMm: 2100),
+        ApplyMeasurement(wallId: 'w2', valueMm: 2800, inner: false),
+      ]) {
+        scratch = c.apply(scratch);
+      }
+      final h = await Harness.create(controller: PlanController(model: scratch));
+
+      await h.session.syncNow();
+
+      expect(h.session.status, SyncStatus.upToDate, reason: h.session.message);
+      expect(h.server.model.walls, hasLength(4));
+      expect(h.server.model.rooms.keys, ['r1']);
+      expect(h.server.model.openings.keys, ['o1']);
+      expect(h.server.model.fixedLengths['w2'], 2800);
+    });
+  });
+
   group('conflicts are resolved by the user, never merged silently', () {
     Future<Harness> conflicted() async {
       final h = await Harness.create();

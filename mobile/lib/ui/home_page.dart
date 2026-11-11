@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../app/app_controller.dart';
 import '../demo/demo_plans.dart';
 import '../geometry/model.dart';
+import '../geometry/rooms.dart';
 import '../state/plan_controller.dart';
 import '../sync/models.dart';
 import '../sync/plan_session.dart';
+import 'dialogs.dart';
 import 'plan_canvas.dart';
 import 'sync_widgets.dart';
 
@@ -28,10 +30,29 @@ class _HomePageState extends State<HomePage> {
 
   static const wideBreakpoint = 720.0;
 
+  bool _askingForRoom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    c.addListener(_onEditorChanged);
+  }
+
   @override
   void dispose() {
+    c.removeListener(_onEditorChanged);
     if (widget.controller == null && widget.app == null) c.dispose();
     super.dispose();
+  }
+
+  /// The room tool found a closed area: ask for a name (once; the dialog creates or cancels the proposal).
+  void _onEditorChanged() {
+    if (c.roomProposal == null || _askingForRoom) return;
+    _askingForRoom = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) await showRoomDialog(context, c);
+      _askingForRoom = false;
+    });
   }
 
   void _load(Size size, PlanModel plan) {
@@ -126,7 +147,10 @@ class _HomePageState extends State<HomePage> {
     }
     final hint = switch (c.tool) {
       PlanTool.wall => c.draftStart == null ? 'Wall: tap the first corner, or drag to draw one wall' : 'Tap the next corner (tap the start again to close)',
-      PlanTool.select => 'Select: tap a wall or corner, drag a corner to move it, drag empty space to pan',
+      PlanTool.select => 'Select: tap a wall, corner, door or room; drag a corner or a door; drag empty space to pan',
+      PlanTool.room => 'Room: tap inside a closed loop of walls',
+      PlanTool.door => 'Door: tap a wall to place a door (drag it later to move it)',
+      PlanTool.window => 'Window: tap a wall to place a window',
     };
     return Text(hint, key: const ValueKey('hint'), style: TextStyle(color: scheme.onSurfaceVariant));
   }
@@ -148,16 +172,45 @@ class _HomePageState extends State<HomePage> {
         onPressed: () => c.selectTool(PlanTool.wall),
       ),
       _ToolButton(
+        buttonKey: const ValueKey('tool-room'),
+        icon: Icons.crop_square,
+        label: 'Room',
+        selected: c.tool == PlanTool.room,
+        onPressed: () => c.selectTool(PlanTool.room),
+      ),
+      _ToolButton(
+        buttonKey: const ValueKey('tool-door'),
+        icon: Icons.door_front_door_outlined,
+        label: 'Door',
+        selected: c.tool == PlanTool.door,
+        onPressed: () => c.selectTool(PlanTool.door),
+      ),
+      _ToolButton(
+        buttonKey: const ValueKey('tool-window'),
+        icon: Icons.window_outlined,
+        label: 'Window',
+        selected: c.tool == PlanTool.window,
+        onPressed: () => c.selectTool(PlanTool.window),
+      ),
+      _ToolButton(
+        buttonKey: const ValueKey('action-measure'),
+        icon: Icons.straighten,
+        label: 'Measure',
+        selected: false,
+        onPressed: c.selectedWallId == null ? null : () => showMeasureDialog(context, c),
+      ),
+      _ToolButton(
         buttonKey: const ValueKey('action-delete'),
         icon: Icons.delete_outline,
         label: 'Delete',
         selected: false,
-        onPressed: c.selectedWallId != null || c.selectedNodeId != null ? c.deleteSelection : null,
+        onPressed: c.hasSelection ? c.deleteSelection : null,
       ),
     ];
+    // Seven tools do not fit a phone's width, so the bottom bar scrolls; the side rail on a tablet has room.
     return axis == Axis.vertical
-        ? Column(mainAxisSize: MainAxisSize.min, children: buttons)
-        : Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: buttons);
+        ? SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: buttons))
+        : SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: buttons));
   }
 
   Widget _wideBody() => Row(
@@ -221,7 +274,21 @@ class PropertiesPanel extends StatelessWidget {
     final m = c.model;
     final wall = c.selectedWallId == null ? null : m.walls[c.selectedWallId];
     final node = c.selectedNodeId == null ? null : m.nodes[c.selectedNodeId];
+    final room = c.selectedRoomId == null ? null : m.rooms[c.selectedRoomId];
+    final opening = c.selectedOpeningId == null ? null : m.openings[c.selectedOpeningId];
     final style = Theme.of(context).textTheme;
+
+    // Enclosed rooms and open areas (balcony, loggia, terrace) are totalled separately, never added together.
+    var enclosed = 0.0;
+    var open = 0.0;
+    for (final r in m.rooms.values) {
+      final area = roomMetrics(m, r)?.areaSqM ?? 0;
+      if (r.areaType == RoomAreaType.enclosed) {
+        enclosed += area;
+      } else {
+        open += area;
+      }
+    }
 
     String mm(double v) => '${v.toStringAsFixed(0)} mm';
 
@@ -236,8 +303,25 @@ class PropertiesPanel extends StatelessWidget {
           Text('Length: ${mm(m.length(wall))}', key: const ValueKey('prop-length')),
           Text('Thickness: ${mm(wall.thicknessMm)}'),
           Text('Height: ${mm(wall.heightMm)}'),
+          if (m.fixedLengths.containsKey(wall.id)) Text('Length fixed by a measurement', key: const ValueKey('prop-fixed')),
+          Text('Openings: ${m.openingsOn(wall.id).length}'),
           Text('From (${m.nodes[wall.startNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.startNodeId]!.y.toStringAsFixed(0)})'),
           Text('To (${m.nodes[wall.endNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.endNodeId]!.y.toStringAsFixed(0)})'),
+        ] else if (opening != null) ...[
+          Text(opening.kind == OpeningKind.door ? 'Door' : 'Window', style: style.labelLarge),
+          Text('Width: ${mm(opening.widthMm)}', key: const ValueKey('prop-opening-width')),
+          Text('Height: ${mm(opening.heightMm)}'),
+          if (opening.sillMm > 0) Text('Sill: ${mm(opening.sillMm)}'),
+          Text('From the wall start: ${mm(opening.offsetMm)}'),
+        ] else if (room != null) ...[
+          Text('Room', style: style.labelLarge),
+          Text(room.name, key: const ValueKey('prop-room-name')),
+          Text('Type: ${room.roomType}${room.areaType == RoomAreaType.openArea ? ' (open area)' : ''}'),
+          if (roomMetrics(m, room) case final metrics?) ...[
+            Text('Area: ${metrics.areaSqM.toStringAsFixed(2)} m\u00B2', key: const ValueKey('prop-room-area')),
+            Text('Perimeter: ${(metrics.innerPerimeterMm / 1000).toStringAsFixed(2)} m'),
+          ],
+          Text('Walls: ${room.wallIds.length}'),
         ] else if (node != null) ...[
           Text('Corner', style: style.labelLarge),
           Text('X: ${mm(node.x)}'),
@@ -248,6 +332,11 @@ class PropertiesPanel extends StatelessWidget {
         const Divider(height: 32),
         Text('Plan', style: style.labelLarge),
         Text('${m.walls.length} walls, ${m.nodes.length} corners', key: const ValueKey('prop-summary')),
+        Text('${m.rooms.length} rooms, ${m.openings.length} doors and windows', key: const ValueKey('prop-rooms')),
+        if (m.rooms.isNotEmpty) ...[
+          Text('Enclosed area: ${enclosed.toStringAsFixed(2)} m\u00B2', key: const ValueKey('prop-enclosed')),
+          Text('Open areas: ${open.toStringAsFixed(2)} m\u00B2', key: const ValueKey('prop-open')),
+        ],
         if (session == null)
           Text('Not synced yet: ${c.serverCommands.length} command(s)', key: const ValueKey('prop-pending'))
         else ...[
