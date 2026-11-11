@@ -39,6 +39,49 @@ jobs:
       # Includes the golden-file contract test with the backend (contracts/client_session.json).
       - run: flutter test
 
+  # The app's sync code against the real API, geometry pipeline and PostgreSQL.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: building_draft
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d building_draft"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          cache: true
+      - name: Start the API (Development mode: one fixed user, migrates on start)
+        run: |
+          dotnet publish src/BuildingDraft.Api -c Release -o api
+          ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5276 \
+            ConnectionStrings__Default="Host=localhost;Port=5432;Database=building_draft;Username=postgres;Password=postgres" \
+            nohup dotnet api/BuildingDraft.Api.dll > api.log 2>&1 &
+          for i in $(seq 1 40); do curl -fs http://localhost:5276/health/ready && break; sleep 2; done
+          curl -fs http://localhost:5276/health/ready
+      - name: Run the live sync tests
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter test test/live --dart-define=BD_API_URL=http://localhost:5276
+      - name: API log
+        if: failure()
+        run: cat api.log
+
   docker:
     runs-on: ubuntu-latest
     needs: test

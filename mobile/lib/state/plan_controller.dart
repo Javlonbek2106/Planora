@@ -29,6 +29,14 @@ class PlanController extends ChangeNotifier {
   final List<PlanCommand> _log = [];
   final List<PlanCommand> _redoLog = [];
 
+  /// Called after an edit was applied, undone or redone, so storage and sync can follow the history.
+  void Function(PlanCommand command)? onExecuted;
+  void Function(PlanCommand command)? onUndone;
+  void Function(PlanCommand command)? onRedone;
+
+  /// While true (during a sync) edits are refused, so the plan cannot change under the synchronization.
+  bool editingLocked = false;
+
   PlanTool tool = PlanTool.select;
   Viewport viewport = const Viewport();
   bool snapToGrid = true;
@@ -64,6 +72,11 @@ class PlanController extends ChangeNotifier {
 
   /// Applies [command] if the result is valid geometry; otherwise leaves the plan untouched and sets [lastError].
   bool execute(PlanCommand command) {
+    if (editingLocked) {
+      lastError = 'Synchronizing: try again in a moment.';
+      notifyListeners();
+      return false;
+    }
     try {
       final next = command.apply(_model);
       // The plan is valid before every edit, so only pairs that involve an edited wall can have become invalid.
@@ -80,6 +93,7 @@ class PlanController extends ChangeNotifier {
       _model = next;
       lastError = null;
       _dropStaleSelection();
+      onExecuted?.call(command);
       notifyListeners();
       return true;
     } on PlanException catch (e) {
@@ -103,23 +117,37 @@ class PlanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Forgets undo/redo history but keeps the plan: used once edits are on the server, because taking back something
+  /// the server already has would need an inverse command.
+  void clearHistory() {
+    _undoStack.clear();
+    _redoStack.clear();
+    _log.clear();
+    _redoLog.clear();
+    notifyListeners();
+  }
+
   void undo() {
-    if (!canUndo) return;
+    if (!canUndo || editingLocked) return;
     _redoStack.add(_model);
-    _redoLog.add(_log.removeLast());
+    final undone = _log.removeLast();
+    _redoLog.add(undone);
     _model = _undoStack.removeLast();
     cancelInteraction();
     _dropStaleSelection();
+    onUndone?.call(undone);
     notifyListeners();
   }
 
   void redo() {
-    if (!canRedo) return;
+    if (!canRedo || editingLocked) return;
     _undoStack.add(_model);
-    _log.add(_redoLog.removeLast());
+    final redone = _redoLog.removeLast();
+    _log.add(redone);
     _model = _redoStack.removeLast();
     cancelInteraction();
     _dropStaleSelection();
+    onRedone?.call(redone);
     notifyListeners();
   }
 

@@ -16,7 +16,11 @@ flutter run -d chrome        # ?demo=apartment yoki ?demo=lattice bilan demo rej
 - **Qatlamlar:** `lib/geometry` (Flutter'ga bog'liq emas: model, command'lar, validatsiya, snap, hit-test), `lib/state` (kontroller, viewport), `lib/ui`.
 - **Offline validatsiya:** server qoidalarining devorlar qismi Dart'da takrorlangan; o'zgargan devorlar bo'yicha incremental tekshiruv (511 devorda 19 ms o'rniga ~1.3 ms).
 - **Shartnoma:** ilovaning chizish seansi `contracts/client_session.json` ga yoziladi (Dart testi), C# testi (`ClientContractTests`) uni serverning haqiqiy geometriya pipeline'ida qayta o'ynaydi. Nom yoki maydon o'zgarsa, ikki tomondan biri yiqiladi. Yangilash: `flutter test --dart-define=UPDATE_GOLDEN=true`.
-- **Hali yo'q:** xona/eshik/deraza, o'lchash ekranlari, lokal SQLite va sync, 3D, autentifikatsiya, qurilmada FPS o'lchovi.
+- **Offline-first (`lib/sync`):** har bir tahrir **avval** lokal SQLite'ga va outbox navbatiga yoziladi (ilova yopilsa yoki tarmoq uzilsa yo'qolmaydi), keyin `push` → `pull` bilan sync qilinadi. Navbatdagi har bir operatsiya o'z `operationId` va ketma-ket `expectedVersion` ga ega, shuning uchun qayta yuborish xavfsiz (idempotent). Boshqa qurilmaning o'zgarishlari qayta o'ynaladi; tushunilmaydigan command bo'lsa butun reja serverdan qayta yuklanadi.
+- **Konflikt:** server o'zgargan bo'lsa, oflayn tahrirlar hech qachon jimgina birlashtirilmaydi: foydalanuvchi "Keep server version" yoki "Keep my changes" (hammasi-yoki-hech-narsa) ni tanlaydi. Server rad etgan tahrir (masalan tasdiqlangan Original Layout) sababi bilan saqlanadi.
+- **Cheklovlar:** sync bo'lgan qadamlarni qaytarib bo'lmaydi (teskari command kerak); sync paytida tahrir bloklanadi; token faqat xotirada (xavfsiz saqlash keyingi bosqich); web'da SQLite o'rniga xotira (faqat dev ko'rinish).
+- **Tekshiruv:** soxta server bilan birlik/vidjet testlari, shuningdek **haqiqiy server bilan jonli testlar** (`test/live`, CI'dagi `e2e` job): `flutter test test/live --dart-define=BD_API_URL=http://localhost:5276`.
+- **Hali yo'q:** xona/eshik/deraza, o'lchash ekranlari, mavjud loyihani serverdan ochish ekrani, 3D, qurilmada FPS o'lchovi.
 
 ## Arxitektura
 

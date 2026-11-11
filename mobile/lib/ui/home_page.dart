@@ -1,29 +1,36 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_controller.dart';
 import '../demo/demo_plans.dart';
 import '../geometry/model.dart';
 import '../state/plan_controller.dart';
+import '../sync/models.dart';
+import '../sync/plan_session.dart';
 import 'plan_canvas.dart';
+import 'sync_widgets.dart';
 
 /// The 2D Constructor screen. Wide screens (tablet) get a tool rail on the left and a properties panel on the
 /// right; narrow screens (phone) get the canvas with a toolbar at the bottom.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.controller});
+  const HomePage({super.key, this.controller, this.app});
 
   final PlanController? controller;
+
+  /// Storage and sync; without it the editor works on its own and nothing is saved.
+  final AppController? app;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  late final PlanController c = widget.controller ?? PlanController();
+  late final PlanController c = widget.controller ?? widget.app?.editor ?? PlanController();
 
   static const wideBreakpoint = 720.0;
 
   @override
   void dispose() {
-    if (widget.controller == null) c.dispose();
+    if (widget.controller == null && widget.app == null) c.dispose();
     super.dispose();
   }
 
@@ -33,16 +40,33 @@ class _HomePageState extends State<HomePage> {
     c.fitToContent(size);
   }
 
+  Future<void> _syncPressed() async {
+    final app = widget.app;
+    if (app == null) return;
+    if (!app.connected) return showConnectDialog(context, app);
+
+    final session = app.session!;
+    if (session.status != SyncStatus.conflict) await session.syncNow();
+    if (!mounted) return;
+    if (session.status == SyncStatus.conflict) return showConflictDialog(context, session);
+
+    final message = session.message;
+    if (message != null && session.status != SyncStatus.upToDate) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= wideBreakpoint;
       return ListenableBuilder(
-        listenable: c,
+        listenable: Listenable.merge([c, if (widget.app != null) widget.app!]),
         builder: (context, _) => Scaffold(
           appBar: AppBar(
             title: const Text('Building Draft'),
             actions: [
+              if (widget.app != null) SyncButton(app: widget.app!, onPressed: _syncPressed),
               IconButton(key: const ValueKey('action-undo'), tooltip: 'Undo', icon: const Icon(Icons.undo), onPressed: c.canUndo ? c.undo : null),
               IconButton(key: const ValueKey('action-redo'), tooltip: 'Redo', icon: const Icon(Icons.redo), onPressed: c.canRedo ? c.redo : null),
               IconButton(
@@ -63,6 +87,7 @@ class _HomePageState extends State<HomePage> {
               PopupMenuButton<String>(
                 key: const ValueKey('action-demo'),
                 tooltip: 'Demo plans',
+                enabled: !(widget.app?.connected ?? false), // loading a demo would replace a plan that is being synced
                 onSelected: (value) => _load(constraints.biggest, value == 'apartment' ? DemoPlans.apartment() : DemoPlans.lattice()),
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'apartment', child: Text('Demo: one-bedroom flat')),
@@ -142,7 +167,7 @@ class _HomePageState extends State<HomePage> {
           const VerticalDivider(width: 1),
           Expanded(child: _canvas()),
           const VerticalDivider(width: 1),
-          SizedBox(width: 280, child: PropertiesPanel(controller: c)),
+          SizedBox(width: 280, child: PropertiesPanel(controller: c, session: widget.app?.session)),
         ],
       );
 
@@ -185,9 +210,10 @@ class _ToolButton extends StatelessWidget {
 
 /// Details of the selection (tablet layout), plus how much has not been synced yet.
 class PropertiesPanel extends StatelessWidget {
-  const PropertiesPanel({super.key, required this.controller});
+  const PropertiesPanel({super.key, required this.controller, this.session});
 
   final PlanController controller;
+  final PlanSession? session;
 
   @override
   Widget build(BuildContext context) {
@@ -222,7 +248,13 @@ class PropertiesPanel extends StatelessWidget {
         const Divider(height: 32),
         Text('Plan', style: style.labelLarge),
         Text('${m.walls.length} walls, ${m.nodes.length} corners', key: const ValueKey('prop-summary')),
-        Text('Not synced yet: ${c.serverCommands.length} command(s)', key: const ValueKey('prop-pending')),
+        if (session == null)
+          Text('Not synced yet: ${c.serverCommands.length} command(s)', key: const ValueKey('prop-pending'))
+        else ...[
+          Text('Sync: ${describeStatus(session!.status)}', key: const ValueKey('prop-sync')),
+          Text('Unsent changes: ${session!.pendingCount}', key: const ValueKey('prop-pending')),
+          if (session!.message != null) Text(session!.message!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
       ],
     );
   }
