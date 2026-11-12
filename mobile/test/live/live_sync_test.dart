@@ -287,6 +287,27 @@ void main() {
       expect(model.fixedLengths.values.single, 4050);
     }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
 
+    test('a door resized on the phone has that size on the real server, and an overlapping size is refused on the phone first', () async {
+      final api = newApi();
+      final a = await deviceA(api);
+      await drawRectangle(a);
+      a.editor.selectTool(PlanTool.door);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      a.editor.selectTool(PlanTool.select);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      expect(a.editor.resizeOpening(widthMm: 1100, heightMm: 2200, sillMm: 0, offsetMm: 1000), isTrue, reason: a.editor.lastError);
+      await a.session.flush();
+
+      await a.session.syncNow();
+
+      expect(a.session.status, SyncStatus.upToDate, reason: a.session.message);
+      final geometry = await api.geometry(a.session.variantId);
+      final door = (geometry['openings']! as List).cast<Map<String, Object?>>().single;
+      expect(((door['widthMm']! as num).toDouble(), (door['heightMm']! as num).toDouble(), (door['offsetMm']! as num).toDouble()), (1100.0, 2200.0, 1000.0));
+    }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
+
     test('a measurement is verified later on the real server, and a superseded one cannot be', () async {
       final api = newApi();
       final a = await deviceA(api);

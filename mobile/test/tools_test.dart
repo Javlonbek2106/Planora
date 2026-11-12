@@ -255,6 +255,66 @@ void main() {
       expect(c.model.openings.values.single.offsetMm, 3100); // 4000 - 900
     });
 
+    test('resizing the selected door changes its size and position as one undoable step', () {
+      final c = withDoor();
+      tap(c, const Vec2(1000, 0));
+      final before = c.serverCommands.length;
+
+      final ok = c.resizeOpening(widthMm: 1000, heightMm: 2200, sillMm: 0, offsetMm: 600);
+
+      expect(ok, isTrue, reason: c.lastError);
+      final door = c.model.openings.values.single;
+      expect((door.widthMm, door.heightMm, door.offsetMm, door.wallId), (1000, 2200, 600, 'w0'));
+      expect(c.serverCommands.length - before, 2, reason: 'remove_opening + attach_opening');
+      expect(c.selectedOpeningId, door.id, reason: 'still selected after the change');
+      c.undo();
+      expect(c.model.openings.values.single.widthMm, 900);
+      expect(c.model.openings.values.single.offsetMm, 550);
+    });
+
+    test('a window can change its sill height too', () {
+      final c = controllerWithRectangle()..selectTool(PlanTool.window);
+      tap(c, const Vec2(1000, 0));
+      c.selectTool(PlanTool.select);
+      tap(c, const Vec2(1000, 0));
+
+      expect(c.resizeOpening(widthMm: 1400, heightMm: 1300, sillMm: 800, offsetMm: 300), isTrue, reason: c.lastError);
+
+      final window = c.model.openings.values.single;
+      expect((window.widthMm, window.heightMm, window.sillMm), (1400, 1300, 800));
+    });
+
+    test('a size that does not fit is refused with the reason and leaves the opening as it was', () {
+      final c = withDoor();
+      tap(c, const Vec2(1000, 0));
+
+      final ok = c.resizeOpening(widthMm: 5000, heightMm: 2100, sillMm: 0, offsetMm: 0);
+
+      expect(ok, isFalse);
+      expect(c.lastError, contains('does not fit'));
+      expect(c.model.openings.values.single.widthMm, 900);
+    });
+
+    test('a door cannot be resized onto another opening', () {
+      final c = withDoor();
+      c.selectTool(PlanTool.window);
+      tap(c, const Vec2(3000, 0));
+      c.selectTool(PlanTool.select);
+      tap(c, const Vec2(1000, 0));
+
+      final ok = c.resizeOpening(widthMm: 900, heightMm: 2100, sillMm: 0, offsetMm: 2500);
+
+      expect(ok, isFalse);
+      expect(c.lastError, contains('overlap'));
+    });
+
+    test('with nothing selected there is nothing to resize', () {
+      final c = controllerWithRectangle();
+
+      expect(c.resizeOpening(widthMm: 900, heightMm: 2100, sillMm: 0, offsetMm: 0), isFalse);
+      expect(c.lastError, contains('Select a door or window'));
+    });
+
     test('Delete removes the selected opening', () {
       final c = withDoor();
       tap(c, const Vec2(1000, 0));

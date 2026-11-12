@@ -254,6 +254,50 @@ void main() {
       expect(struck, hasLength(1));
     });
 
+    testWidgets('selecting a door turns Measure into Edit size, and the dialog changes the door', (tester) async {
+      final c = await pumpApp(tester);
+      await useTool(tester, 'tool-door');
+      await tapPlan(tester, c, const Vec2(1000, 0));
+      await useTool(tester, 'tool-select');
+      expect(find.byKey(const ValueKey('action-resize-opening')), findsNothing);
+
+      await tapPlan(tester, c, const Vec2(1000, 0));
+      expect(find.byKey(const ValueKey('action-measure')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('action-resize-opening')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('opening-sill')), findsNothing, reason: 'a door has no sill');
+
+      await tester.enterText(find.byKey(const ValueKey('opening-width')), '1000');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('opening-apply')));
+      await tester.pumpAndSettle();
+
+      expect(c.model.openings.values.single.widthMm, 1000);
+      expect(find.byKey(const ValueKey('opening-dialog')), findsNothing);
+      expect(find.byKey(const ValueKey('prop-opening-width')), findsOneWidget);
+      expect(find.text('Width: 1000 mm'), findsOneWidget);
+    });
+
+    testWidgets('a size that does not fit keeps the dialog open and says why', (tester) async {
+      final c = await pumpApp(tester);
+      await useTool(tester, 'tool-window');
+      await tapPlan(tester, c, const Vec2(1000, 0));
+      await useTool(tester, 'tool-select');
+      await tapPlan(tester, c, const Vec2(1000, 0));
+      await tester.tap(find.byKey(const ValueKey('action-resize-opening')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('opening-sill')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('opening-width')), '9000');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('opening-apply')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('opening-dialog')), findsOneWidget);
+      expect(find.byKey(const ValueKey('opening-error')), findsOneWidget);
+      expect(c.model.openings.values.single.widthMm, 1200);
+    });
+
     testWidgets('the apply button waits for a valid number', (tester) async {
       final c = await pumpApp(tester);
       await tapPlan(tester, c, const Vec2(2000, 0));

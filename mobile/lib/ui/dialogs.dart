@@ -88,6 +88,81 @@ Future<void> showRoomDialog(BuildContext context, PlanController c) async {
   );
 }
 
+/// Edits the size and position of the selected door or window. The dialog stays open with the reason when the new
+/// values do not fit (too wide for the wall, overlapping another opening).
+Future<void> showOpeningDialog(BuildContext context, PlanController c) async {
+  final opening = c.selectedOpeningId == null ? null : c.model.openings[c.selectedOpeningId];
+  if (opening == null) return;
+
+  final isWindow = opening.kind == OpeningKind.window;
+  String text(double v) => v.round().toString();
+  final width = TextEditingController(text: text(opening.widthMm));
+  final height = TextEditingController(text: text(opening.heightMm));
+  final sill = TextEditingController(text: text(opening.sillMm));
+  final offset = TextEditingController(text: text(opening.offsetMm));
+  String? problem;
+
+  double? number(TextEditingController field) => double.tryParse(field.text.replaceAll(',', '.'));
+
+  Widget field(String key, TextEditingController controller, String label, StateSetter setState) => TextField(
+        key: ValueKey(key),
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(labelText: label, suffixText: 'mm'),
+        onChanged: (_) => setState(() => problem = null),
+      );
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) {
+        final w = number(width), h = number(height), s = number(sill), o = number(offset);
+        final valid = w != null && h != null && s != null && o != null && w > 0 && h > 0 && s >= 0 && o >= 0;
+        return AlertDialog(
+          key: const ValueKey('opening-dialog'),
+          title: Text(isWindow ? 'Edit window' : 'Edit door'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  field('opening-width', width, 'Width', setState),
+                  field('opening-height', height, 'Height', setState),
+                  if (isWindow) field('opening-sill', sill, 'Sill height (from the floor)', setState),
+                  field('opening-offset', offset, 'Distance from the wall start', setState),
+                  if (problem != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(problem!, key: const ValueKey('opening-error'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(
+              key: const ValueKey('opening-apply'),
+              onPressed: !valid
+                  ? null
+                  : () {
+                      if (c.resizeOpening(widthMm: w, heightMm: h, sillMm: isWindow ? s : opening.sillMm, offsetMm: o)) {
+                        Navigator.pop(dialogContext);
+                      } else {
+                        setState(() => problem = c.lastError);
+                      }
+                    },
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 /// Enters a measured length for the selected wall (a laser value or a tape measure reading).
 Future<void> showMeasureDialog(BuildContext context, PlanController c) async {
   final wall = c.selectedWallId == null ? null : c.model.walls[c.selectedWallId];

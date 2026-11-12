@@ -194,13 +194,23 @@ class _HomePageState extends State<HomePage> {
         selected: c.tool == PlanTool.window,
         onPressed: () => c.selectTool(PlanTool.window),
       ),
-      _ToolButton(
-        buttonKey: const ValueKey('action-measure'),
-        icon: Icons.straighten,
-        label: 'Measure',
-        selected: false,
-        onPressed: c.selectedWallId == null ? null : () => showMeasureDialog(context, c),
-      ),
+      // One slot, two jobs: it measures the selected wall, or edits the size of the selected door or window.
+      if (c.selectedOpeningId != null)
+        _ToolButton(
+          buttonKey: const ValueKey('action-resize-opening'),
+          icon: Icons.aspect_ratio,
+          label: 'Edit size',
+          selected: false,
+          onPressed: () => showOpeningDialog(context, c),
+        )
+      else
+        _ToolButton(
+          buttonKey: const ValueKey('action-measure'),
+          icon: Icons.straighten,
+          label: 'Measure',
+          selected: false,
+          onPressed: c.selectedWallId == null ? null : () => showMeasureDialog(context, c),
+        ),
       _ToolButton(
         buttonKey: const ValueKey('action-delete'),
         icon: Icons.delete_outline,

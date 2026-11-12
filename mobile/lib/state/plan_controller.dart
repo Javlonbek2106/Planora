@@ -552,6 +552,21 @@ class PlanController extends ChangeNotifier {
     if (ok) openingPreview = null;
   }
 
+  /// Changes the size and position of the selected door or window. One undoable step; the server gets a removal
+  /// and a new attachment (the same two commands a slide along the wall already uses).
+  bool resizeOpening({required double widthMm, required double heightMm, required double sillMm, required double offsetMm}) {
+    final opening = selectedOpeningId == null ? null : _model.openings[selectedOpeningId];
+    if (opening == null) {
+      lastError = 'Select a door or window first.';
+      notifyListeners();
+      return false;
+    }
+    return execute(CommandSequence('Resize ${opening.kind.name}', [
+      RemoveOpening(opening.id),
+      AttachOpening(openingId: opening.id, wallId: opening.wallId, kind: opening.kind, offsetMm: offsetMm, widthMm: widthMm, heightMm: heightMm, sillMm: sillMm),
+    ]));
+  }
+
   // ---- measurements ----
 
   /// Fixes the selected wall to a measured length ([inner] = between the wall faces, otherwise centerline).
