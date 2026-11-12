@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../geometry/model.dart';
 import 'models.dart';
 
 /// The server answered, but refused (its error contract: errorCode and message).
@@ -228,6 +229,10 @@ class ApiClient {
     if (response.statusCode != 200) throw ApiException(response.statusCode, 'HTTP_${response.statusCode}', 'Could not load measurements.');
     return (jsonDecode(response.body) as List).cast<Map<String, Object?>>();
   }
+
+  /// Changes the status of a measurement the server already knows (it does not touch the geometry).
+  Future<void> setMeasurementStatus(String measurementId, MeasurementStatus status) =>
+      _send('PUT', '/api/v1/measurements/$measurementId/status', {'status': status.name});
 
   /// The full geometry of a variant: `{ version, nodes, walls, ... }`.
   Future<Map<String, Object?>> geometry(String variantId) => _send('GET', '/api/v1/variants/$variantId/geometry');

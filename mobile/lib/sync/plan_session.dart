@@ -170,6 +170,24 @@ class PlanSession extends ChangeNotifier {
 
   Future<void> keepMine() => _run(() => service.keepMine(variantId));
 
+  /// Marks a measurement as checked. This needs the server: the status lives there, and a measurement that is
+  /// still in the outbox does not exist there yet. Returns the reason when it did not work, null on success.
+  Future<String?> verifyMeasurement(String measurementId) async {
+    if (status == SyncStatus.syncing) return 'A sync is running, try again in a moment.';
+    if (pendingCount > 0) return 'Sync the plan first: the server does not know this measurement yet.';
+    try {
+      await service.api.setMeasurementStatus(measurementId, MeasurementStatus.verified);
+    } on OfflineException catch (e) {
+      return 'Cannot reach the server: ${e.reason}';
+    } on ApiException catch (e) {
+      return '${e.code}: ${e.message}';
+    }
+    controller.setMeasurementStatus(measurementId, MeasurementStatus.verified);
+    _enqueueWrite(_saveModel);
+    await flush();
+    return null;
+  }
+
   Future<void> _run(Future<SyncReport> Function() action) async {
     // Lock before the first await: an edit slipping in between would be queued after the sync took its snapshot.
     status = SyncStatus.syncing;

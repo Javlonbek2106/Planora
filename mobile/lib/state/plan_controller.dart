@@ -148,6 +148,15 @@ class PlanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Records that the server changed the status of a measurement. Not an edit: the geometry is untouched, so it
+  /// is neither queued nor undoable.
+  void setMeasurementStatus(String measurementId, MeasurementStatus status) {
+    final current = _model.measurements[measurementId];
+    if (current == null) return;
+    _model = _model.copyWith(measurements: {..._model.measurements, measurementId: current.withStatus(status)});
+    notifyListeners();
+  }
+
   /// Forgets undo/redo history but keeps the plan: used once edits are on the server, because taking back something
   /// the server already has would need an inverse command.
   void clearHistory() {

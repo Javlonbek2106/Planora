@@ -307,7 +307,16 @@ class PropertiesPanel extends StatelessWidget {
           Text('Height: ${mm(wall.heightMm)}'),
           if (m.fixedLengths.containsKey(wall.id)) Text('Length fixed by a measurement', key: const ValueKey('prop-fixed')),
           Text('Openings: ${m.openingsOn(wall.id).length}'),
-          MeasurementHistory(model: m, wallId: wall.id),
+          MeasurementHistory(
+            model: m,
+            wallId: wall.id,
+            onVerify: session == null
+                ? null
+                : (id) async {
+                    final problem = await session!.verifyMeasurement(id);
+                    if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+                  },
+          ),
           Text('From (${m.nodes[wall.startNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.startNodeId]!.y.toStringAsFixed(0)})'),
           Text('To (${m.nodes[wall.endNodeId]!.x.toStringAsFixed(0)}, ${m.nodes[wall.endNodeId]!.y.toStringAsFixed(0)})'),
         ] else if (opening != null) ...[
@@ -355,10 +364,13 @@ class PropertiesPanel extends StatelessWidget {
 /// The measurements taken on a wall, newest first. Older ones stay visible but struck through once superseded:
 /// the history is never deleted.
 class MeasurementHistory extends StatelessWidget {
-  const MeasurementHistory({super.key, required this.model, required this.wallId});
+  const MeasurementHistory({super.key, required this.model, required this.wallId, this.onVerify});
 
   final PlanModel model;
   final String wallId;
+
+  /// Offered on unverified entries when the plan is synced with a server (the status is kept there).
+  final Future<void> Function(String measurementId)? onVerify;
 
   static String _when(DateTime t) {
     final local = t.toLocal();
@@ -384,14 +396,26 @@ class MeasurementHistory extends StatelessWidget {
           Padding(
             key: ValueKey('measurement-${m.id}'),
             padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '${m.valueMm.round()} mm ${m.inner ? 'between faces' : 'centerline'}\n'
-              '${m.source.label} \u00B7 ${m.status.name} \u00B7 ${_when(m.capturedAt)}'
-              '${m.notes == null || m.notes!.isEmpty ? '' : '\n${m.notes}'}',
-              style: TextStyle(
-                color: m.status == MeasurementStatus.verified ? scheme.primary : scheme.onSurfaceVariant,
-                decoration: m.status == MeasurementStatus.superseded ? TextDecoration.lineThrough : null,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${m.valueMm.round()} mm ${m.inner ? 'between faces' : 'centerline'}\n'
+                  '${m.source.label} \u00B7 ${m.status.name} \u00B7 ${_when(m.capturedAt)}'
+                  '${m.notes == null || m.notes!.isEmpty ? '' : '\n${m.notes}'}',
+                  style: TextStyle(
+                    color: m.status == MeasurementStatus.verified ? scheme.primary : scheme.onSurfaceVariant,
+                    decoration: m.status == MeasurementStatus.superseded ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (onVerify != null && m.status == MeasurementStatus.unverified)
+                  TextButton(
+                    key: ValueKey('verify-${m.id}'),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32), alignment: Alignment.centerLeft),
+                    onPressed: () => onVerify!(m.id),
+                    child: const Text('Mark as verified'),
+                  ),
+              ],
             ),
           ),
       ],

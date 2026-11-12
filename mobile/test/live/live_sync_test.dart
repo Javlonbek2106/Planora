@@ -287,6 +287,31 @@ void main() {
       expect(model.fixedLengths.values.single, 4050);
     }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
 
+    test('a measurement is verified later on the real server, and a superseded one cannot be', () async {
+      final api = newApi();
+      final a = await deviceA(api);
+      await drawRectangle(a);
+      a.editor.selectTool(PlanTool.select);
+      for (final value in [3800.0, 3850.0]) {
+        a.editor.pointerDown(const Vec2(2000, 0));
+        a.editor.pointerUp(const Vec2(2000, 0));
+        expect(a.editor.applyMeasurement(value), isTrue, reason: a.editor.lastError);
+      }
+      await a.session.flush();
+      await a.session.syncNow();
+      expect(a.session.status, SyncStatus.upToDate, reason: a.session.message);
+      final older = a.editor.model.measurements.values.firstWhere((m) => m.status == MeasurementStatus.superseded);
+      final current = a.editor.model.measurements.values.firstWhere((m) => m.status == MeasurementStatus.unverified);
+
+      expect(await a.session.verifyMeasurement(current.id), isNull);
+      expect(await a.session.verifyMeasurement(older.id), contains('MEASUREMENT_STATUS_FINAL'));
+
+      final recorded = (await api.measurements(a.session.document.projectId, a.session.variantId)).firstWhere((m) => m['id'] == current.id);
+      expect(recorded['status'], 'verified');
+      expect(a.editor.model.measurements[current.id]!.status, MeasurementStatus.verified);
+      expect(a.editor.model.measurements[older.id]!.status, MeasurementStatus.superseded);
+    }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
+
     test('a second phone lists the projects on the real server and opens one with its walls, rooms and history', () async {
       final api = newApi();
       final a = await deviceA(api);

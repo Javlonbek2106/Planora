@@ -24,6 +24,7 @@ class FakeServer {
   bool snapshotOnlyPull = false;
   int requests = 0;
   List<Map<String, Object?>> extraProjects = [];
+  final List<({String id, String status})> statusChanges = [];
   final Map<String, int> _applied = {};
   final List<({String type, Map<String, Object?> payload, int version})> log = [];
 
@@ -104,6 +105,16 @@ class FakeServer {
               'notes': m.notes,
             }
         ];
+      case ('PUT', final p) when p.startsWith('/api/v1/measurements/') && p.endsWith('/status'):
+        final id = p.split('/')[4];
+        final found = model.measurements[id];
+        if (found == null) return http.Response(jsonEncode({'errorCode': 'NOT_FOUND', 'message': 'No such measurement.'}), 404);
+        if (found.status == MeasurementStatus.superseded) {
+          return http.Response(jsonEncode({'errorCode': 'MEASUREMENT_STATUS_FINAL', 'message': 'A Superseded measurement cannot change status.'}), 422);
+        }
+        statusChanges.add((id: id, status: body['status']! as String));
+        model = model.copyWith(measurements: {...model.measurements, id: found.withStatus(MeasurementStatus.fromWire(body['status']! as String))});
+        result = {'id': id, 'status': body['status']};
       case ('GET', '/api/v1/variants/$variantId/geometry'):
         result = {
           'version': version,

@@ -381,6 +381,66 @@ void main() {
 
       expect(h.server.model.measurements, hasLength(1));
     });
+
+    group('verifying later', () {
+      Future<(Harness, String)> withSyncedMeasurement() async {
+        final h = await withWall();
+        h.controller.pointerDown(const Vec2(2000, 0));
+        h.controller.pointerUp(const Vec2(2000, 0));
+        h.controller.applyMeasurement(3800);
+        await h.session.flush();
+        await h.session.syncNow();
+        return (h, h.controller.model.measurements.keys.single);
+      }
+
+      test('a synced measurement is verified on the server and on this device, without a new version or an edit', () async {
+        final (h, id) = await withSyncedMeasurement();
+        final version = h.server.version;
+
+        final problem = await h.session.verifyMeasurement(id);
+
+        expect(problem, isNull);
+        expect(h.server.statusChanges.single, (id: id, status: 'verified'));
+        expect(h.controller.model.measurements[id]!.status, MeasurementStatus.verified);
+        expect(h.server.version, version, reason: 'a status is not a geometry change');
+        expect(await h.outbox(), isEmpty);
+        expect((await h.store.loadDocument(FakeServer.variantId))!.model.measurements[id]!.status, MeasurementStatus.verified, reason: 'stored, so it survives a restart');
+      });
+
+      test('a measurement that is still queued cannot be verified yet', () async {
+        final h = await withWall();
+        h.controller.pointerDown(const Vec2(2000, 0));
+        h.controller.pointerUp(const Vec2(2000, 0));
+        h.controller.applyMeasurement(3800);
+        await h.session.flush();
+
+        final problem = await h.session.verifyMeasurement(h.controller.model.measurements.keys.single);
+
+        expect(problem, contains('Sync the plan first'));
+        expect(h.server.statusChanges, isEmpty);
+        expect(h.controller.model.measurements.values.single.status, MeasurementStatus.unverified);
+      });
+
+      test('an unreachable server leaves the measurement unverified', () async {
+        final (h, id) = await withSyncedMeasurement();
+        h.server.offline = true;
+
+        final problem = await h.session.verifyMeasurement(id);
+
+        expect(problem, contains('Cannot reach the server'));
+        expect(h.controller.model.measurements[id]!.status, MeasurementStatus.unverified);
+      });
+
+      test('a refusal from the server is shown and nothing changes locally', () async {
+        final (h, id) = await withSyncedMeasurement();
+        h.server.model = h.server.model.copyWith(measurements: {id: h.server.model.measurements[id]!.withStatus(MeasurementStatus.superseded)});
+
+        final problem = await h.session.verifyMeasurement(id);
+
+        expect(problem, contains('MEASUREMENT_STATUS_FINAL'));
+        expect(h.controller.model.measurements[id]!.status, MeasurementStatus.unverified);
+      });
+    });
   });
 
   group('conflicts are resolved by the user, never merged silently', () {

@@ -180,6 +180,45 @@ void main() {
     expect(reopened.session!.pendingCount, 1);
   });
 
+  group('verifying a measurement later', () {
+    Future<Setup> measuredWall(WidgetTester tester) async {
+      final s = await pumpApp(tester);
+      await connect(tester);
+      await drawWall(tester);
+      await tester.tap(find.byKey(const ValueKey('tool-select')));
+      await tester.pump();
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('plan-canvas'))));
+      await tester.pumpAndSettle();
+      expect(s.editor.selectedWallId, isNotNull);
+      s.editor.applyMeasurement(3800);
+      await tester.pumpAndSettle();
+      return s;
+    }
+
+    testWidgets('before the first sync the button explains that the server does not know the measurement yet', (tester) async {
+      final s = await measuredWall(tester);
+
+      await tester.tap(find.textContaining('Mark as verified'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Sync the plan first'), findsOneWidget);
+      expect(s.editor.model.measurements.values.single.status, MeasurementStatus.unverified);
+    });
+
+    testWidgets('after syncing, one tap verifies it and the button goes away', (tester) async {
+      final s = await measuredWall(tester);
+      await tester.tap(find.byKey(const ValueKey('action-sync')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('Mark as verified'));
+      await tester.pumpAndSettle();
+
+      expect(s.editor.model.measurements.values.single.status, MeasurementStatus.verified);
+      expect(s.server.statusChanges, hasLength(1));
+      expect(find.textContaining('Mark as verified'), findsNothing);
+    });
+  });
+
   testWidgets('demo plans are disabled once connected, so a synced plan cannot be replaced by accident', (tester) async {
     await pumpApp(tester);
     await connect(tester);
