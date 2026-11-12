@@ -124,11 +124,25 @@ class SyncService {
   }
 
   Future<PlanModel> _reload(StoredDocument document) async {
-    final geometry = await api.geometry(document.variantId);
-    final history = await api.measurements(document.projectId, document.variantId);
-    final model = modelFromSnapshot(geometry, document.floorId).copyWith(measurements: measurementsFromServer(history));
-    await store.saveDocument(document.copyWith(serverVersion: geometry['version']! as int, model: model));
-    return model;
+    final fetched = await _fetch(document.projectId, document.variantId, document.floorId);
+    await store.saveDocument(document.copyWith(serverVersion: fetched.version, model: fetched.model));
+    return fetched.model;
+  }
+
+  Future<({int version, PlanModel model})> _fetch(String projectId, String variantId, String floorId) async {
+    final geometry = await api.geometry(variantId);
+    final history = await api.measurements(projectId, variantId);
+    final model = modelFromSnapshot(geometry, floorId).copyWith(measurements: measurementsFromServer(history));
+    return (version: geometry['version']! as int, model: model);
+  }
+
+  /// Stores a plan that exists on the server but not on this device yet. Nothing is saved unless the whole
+  /// download worked, so a failed attempt leaves no half-empty plan behind.
+  Future<StoredDocument> download({required String projectId, required String variantId, required String floorId}) async {
+    final fetched = await _fetch(projectId, variantId, floorId);
+    final document = StoredDocument(variantId: variantId, projectId: projectId, floorId: floorId, serverVersion: fetched.version, model: fetched.model);
+    await store.saveDocument(document);
+    return document;
   }
 
   // ---- conflict resolution: the user's explicit choice ----

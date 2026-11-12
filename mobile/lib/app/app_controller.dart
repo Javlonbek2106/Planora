@@ -73,15 +73,78 @@ class AppController extends ChangeNotifier {
       _attach(opened);
       return true;
     } on OfflineException catch (e) {
-      connectionError = 'Cannot reach the server: ${e.reason}';
+      connectionError = _describe(e);
     } on ApiException catch (e) {
-      connectionError = e.status == 401 ? 'The server rejected the token (401).' : '${e.code}: ${e.message}';
+      connectionError = _describe(e);
     } finally {
       connecting = false;
       notifyListeners();
     }
     return false;
   }
+
+  /// The signed-in user's projects on [url]. Throws nothing: a failure is reported through [connectionError].
+  Future<List<RemoteProject>?> listProjects({required String url, String? token}) async {
+    connecting = true;
+    connectionError = null;
+    notifyListeners();
+    try {
+      _token = token;
+      return await _api(url).projects();
+    } on OfflineException catch (e) {
+      connectionError = _describe(e);
+    } on ApiException catch (e) {
+      connectionError = _describe(e);
+    } finally {
+      connecting = false;
+      notifyListeners();
+    }
+    return null;
+  }
+
+  /// Opens a server project on this device. A plan that is already stored here is opened as it is (its unsent
+  /// edits are kept and the next sync reconciles them); otherwise it is downloaded first.
+  Future<bool> openProject({required String url, String? token, required RemoteProject project, required RemoteVariant variant}) async {
+    final floorId = project.floorId;
+    if (floorId == null) {
+      connectionError = 'This project has no floor yet, so there is no plan to open.';
+      notifyListeners();
+      return false;
+    }
+
+    connecting = true;
+    connectionError = null;
+    notifyListeners();
+    try {
+      _token = token;
+      final service = SyncService(api: _api(url), store: store, deviceId: await _deviceId());
+      if (await store.loadDocument(variant.id) == null) {
+        await service.download(projectId: project.id, variantId: variant.id, floorId: floorId);
+      }
+
+      final opened = await PlanSession.open(controller: editor, store: store, service: service, variantId: variant.id);
+      baseUrl = url;
+      await store.setSetting(_baseUrlKey, url);
+      await store.setSetting(_variantKey, variant.id);
+      _attach(opened);
+      return true;
+    } on OfflineException catch (e) {
+      connectionError = _describe(e);
+    } on ApiException catch (e) {
+      connectionError = _describe(e);
+    } finally {
+      connecting = false;
+      notifyListeners();
+    }
+    return false;
+  }
+
+  String _describe(Exception error) => switch (error) {
+        OfflineException(:final reason) => 'Cannot reach the server: $reason',
+        ApiException(status: 401) => 'The server rejected the token (401).',
+        ApiException(:final code, :final message) => '$code: $message',
+        _ => 'Unexpected error: $error',
+      };
 
   void setToken(String? token) => _token = token;
 

@@ -74,6 +74,49 @@ class ProjectRef {
   final String floorId;
 }
 
+class RemoteVariant {
+  const RemoteVariant({required this.id, required this.name, required this.type, required this.currentVersion, required this.isLocked});
+
+  final String id;
+  final String name;
+  final String type;
+  final int currentVersion;
+  final bool isLocked;
+}
+
+/// A project as the server lists it. The app edits one floor of one variant at a time, so the floor to open is
+/// the lowest one (null when the project has no floor yet).
+class RemoteProject {
+  const RemoteProject({required this.id, required this.name, this.address, required this.floorId, required this.variants});
+
+  final String id;
+  final String name;
+  final String? address;
+  final String? floorId;
+  final List<RemoteVariant> variants;
+
+  factory RemoteProject.fromJson(Map<String, Object?> json) {
+    final floors = ((json['floors'] as List?) ?? const []).cast<Map<String, Object?>>().toList()
+      ..sort((a, b) => (a['floorNumber']! as num).compareTo(b['floorNumber']! as num));
+    return RemoteProject(
+      id: json['id']! as String,
+      name: json['name']! as String,
+      address: json['address'] as String?,
+      floorId: floors.isEmpty ? null : floors.first['id']! as String,
+      variants: [
+        for (final v in ((json['variants'] as List?) ?? const []).cast<Map<String, Object?>>())
+          RemoteVariant(
+            id: v['id']! as String,
+            name: v['name']! as String,
+            type: (v['type'] ?? '') as String,
+            currentVersion: (v['currentVersion'] ?? 0) as int,
+            isLocked: (v['isLocked'] ?? false) as bool,
+          ),
+      ],
+    );
+  }
+}
+
 /// Thin client for the backend's `/api/v1`. It knows the routes and the error contract, nothing about plans.
 class ApiClient {
   ApiClient({required this.client, required this.baseUrl, this.token, this.timeout = const Duration(seconds: 20)});
@@ -120,6 +163,12 @@ class ApiClient {
     final variantId = ((project['variants']! as List).first as Map)['id']! as String;
     final floor = await _send('POST', '/api/v1/projects/$projectId/floors', {'floorNumber': 1});
     return ProjectRef(projectId, variantId, floor['id']! as String);
+  }
+
+  /// The projects of the signed-in user (the first 100, most recent first as the server orders them).
+  Future<List<RemoteProject>> projects() async {
+    final response = await _send('GET', '/api/v1/projects?page=1&pageSize=100');
+    return [for (final p in (response['items']! as List).cast<Map<String, Object?>>()) RemoteProject.fromJson(p)];
   }
 
   Future<List<PushResult>> push(List<OutboxOperation> operations, {String? deviceId}) async {

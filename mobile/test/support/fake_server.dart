@@ -23,6 +23,7 @@ class FakeServer {
   bool offline = false;
   bool snapshotOnlyPull = false;
   int requests = 0;
+  List<Map<String, Object?>> extraProjects = [];
   final Map<String, int> _applied = {};
   final List<({String type, Map<String, Object?> payload, int version})> log = [];
 
@@ -53,6 +54,27 @@ class FakeServer {
     switch ((request.method, path)) {
       case ('POST', '/api/v1/projects'):
         result = {'id': projectId, 'variants': [{'id': variantId}]};
+      case ('GET', '/api/v1/projects'):
+        result = {
+          'items': [
+            {
+              'id': projectId,
+              'name': 'Flat 12',
+              'address': 'Amir Temur 5',
+              'floors': [
+                {'id': 'f-upper', 'floorNumber': 2},
+                {'id': floorId, 'floorNumber': 1},
+              ],
+              'variants': [
+                {'id': variantId, 'name': 'Original Layout', 'type': 'original', 'currentVersion': version, 'isLocked': locked},
+              ],
+            },
+            ...extraProjects,
+          ],
+          'page': 1,
+          'pageSize': 100,
+          'total': 1 + extraProjects.length,
+        };
       case ('POST', '/api/v1/projects/$projectId/floors'):
         result = {'id': floorId};
       case ('POST', '/api/v1/sync/push'):

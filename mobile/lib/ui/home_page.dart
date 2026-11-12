@@ -87,6 +87,8 @@ class _HomePageState extends State<HomePage> {
           appBar: AppBar(
             title: const Text('Building Draft'),
             actions: [
+              if (widget.app != null)
+                IconButton(key: const ValueKey('action-projects'), tooltip: 'Open a project from the server', icon: const Icon(Icons.folder_open), onPressed: () => showProjectsDialog(context, widget.app!)),
               if (widget.app != null) SyncButton(app: widget.app!, onPressed: _syncPressed),
               IconButton(key: const ValueKey('action-undo'), tooltip: 'Undo', icon: const Icon(Icons.undo), onPressed: c.canUndo ? c.undo : null),
               IconButton(key: const ValueKey('action-redo'), tooltip: 'Redo', icon: const Icon(Icons.redo), onPressed: c.canRedo ? c.redo : null),

@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:building_draft_app/app/app_controller.dart';
 import 'package:building_draft_app/geometry/commands.dart';
 import 'package:building_draft_app/geometry/model.dart';
 import 'package:building_draft_app/geometry/rooms.dart';
@@ -284,6 +285,50 @@ void main() {
       expect(model.measurementsOf(model.fixedLengths.keys.single).map((m) => m.status), unorderedEquals([MeasurementStatus.superseded, MeasurementStatus.verified]));
       expect(model.measurements.values.firstWhere((m) => m.notes == 'tape check').capturedAt.isUtc, isTrue);
       expect(model.fixedLengths.values.single, 4050);
+    }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
+
+    test('a second phone lists the projects on the real server and opens one with its walls, rooms and history', () async {
+      final api = newApi();
+      final a = await deviceA(api);
+      await drawRectangle(a);
+      a.editor.selectTool(PlanTool.select);
+      a.editor.pointerDown(const Vec2(2000, 0));
+      a.editor.pointerUp(const Vec2(2000, 0));
+      expect(a.editor.applyMeasurement(3900, notes: 'from phone A'), isTrue, reason: a.editor.lastError);
+      await a.session.flush();
+      await a.session.syncNow();
+      expect(a.session.status, SyncStatus.upToDate, reason: a.session.message);
+
+      // Phone B is a fresh install: empty database, nothing but the server address.
+      final b = AppController(store: SqliteLocalStore.open(':memory:'), editor: PlanController());
+      final projects = await b.listProjects(url: apiUrl);
+      expect(projects, isNotNull, reason: b.connectionError);
+      final project = projects!.firstWhere((p) => p.id == a.session.document.projectId);
+      expect(project.floorId, a.session.document.floorId);
+      expect(project.variants.single.id, a.session.variantId);
+
+      final opened = await b.openProject(url: apiUrl, project: project, variant: project.variants.single);
+
+      expect(opened, isTrue, reason: b.connectionError);
+      expect(b.editor.model.walls, hasLength(4));
+      expect(b.editor.model.fixedLengths.values.single, 4100);
+      expect(b.editor.model.measurements.values.single.notes, 'from phone A');
+      final sessionB = b.session!;
+      expect(sessionB.document.serverVersion, a.session.document.serverVersion);
+      expect(sessionB.status, SyncStatus.upToDate);
+
+      // And it can keep working: an edit on B syncs and A sees it.
+      b.editor.selectTool(PlanTool.wall);
+      for (final p in const [Vec2(1000, 0), Vec2(1000, 3000)]) {
+        b.editor.pointerDown(p);
+        b.editor.pointerUp(p);
+      }
+      b.editor.cancelInteraction();
+      await sessionB.flush();
+      await sessionB.syncNow();
+      expect(sessionB.status, SyncStatus.upToDate, reason: sessionB.message);
+      await a.session.syncNow();
+      expect(a.editor.model.walls.length, greaterThan(4));
     }, skip: apiUrl.isEmpty ? 'set --dart-define=BD_API_URL to run against a real server' : false);
 
     test('the same push sent twice is applied once, and a down server leaves the edit queued', () async {
